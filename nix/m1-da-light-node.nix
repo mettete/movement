@@ -41,7 +41,7 @@ pkgs.rustPlatform.buildRustPackage rec {
         export HOME=$(mktemp -d)
         export RUSTFLAGS="${RUSTFLAGS}"
         cargo clean
-        cargo build --release -p monza-full-node
+        cargo build --release
     '';
 
     ## buildAndTestSubdir = "protocol-units/da/m1/light-node";
