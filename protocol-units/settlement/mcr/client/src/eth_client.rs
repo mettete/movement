@@ -102,7 +102,7 @@ impl
 			ws_url,
 			signer_address,
 			contract_address,
-			config.gas_limit,
+			config.gas_limit as u128,
 			config.tx_send_retries,
 		)
 		.await
