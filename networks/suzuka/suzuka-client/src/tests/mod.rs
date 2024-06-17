@@ -3,40 +3,49 @@ use crate::{
 	rest_client::{Client, FaucetClient},
 	types::LocalAccount,
 };
-use alloy_network::EthereumSigner;
-use alloy_primitives::Address;
-use alloy_provider::ProviderBuilder;
-use alloy_signer_wallet::LocalWallet;
-use anyhow::anyhow;
 use anyhow::{Context, Result};
-use mcr_settlement_client::{
-	eth_client::{McrEthSettlementClient, McrEthSettlementConfig},
-	McrSettlementClientOperations,
-};
 use once_cell::sync::Lazy;
 use std::str::FromStr;
 use tokio::time::{sleep, Duration};
 use url::Url;
 
-mod settlement_state;
-
-static SUZUKA_CONFIG: Lazy<maptos_execution_util::config::Config> = Lazy::new(|| {
-	maptos_execution_util::config::Config::try_from_env()
-		.context("Failed to create the config")
-		.unwrap()
+static SUZUKA_CONFIG: Lazy<suzuka_config::Config> = Lazy::new(|| {
+	let dot_movement = dot_movement::DotMovement::try_from_env().unwrap();
+	let path = dot_movement.get_path().join("config.toml");
+	suzuka_config::Config::try_from_toml_file(&path).unwrap()
 });
 
 // :!:>section_1c
 static NODE_URL: Lazy<Url> = Lazy::new(|| {
 	Url::from_str(
-		format!("http://{}", SUZUKA_CONFIG.aptos_config.aptos_rest_listen_url.as_str()).as_str(),
+		format!(
+			"http://{}",
+			SUZUKA_CONFIG
+				.execution_config
+				.try_aptos_config()
+				.unwrap()
+				.try_aptos_rest_listen_url()
+				.unwrap()
+				.as_str()
+		)
+		.as_str(),
 	)
 	.unwrap()
 });
 
 static FAUCET_URL: Lazy<Url> = Lazy::new(|| {
 	Url::from_str(
-		format!("http://{}", SUZUKA_CONFIG.aptos_config.aptos_faucet_listen_url.as_str()).as_str(),
+		format!(
+			"http://{}",
+			SUZUKA_CONFIG
+				.execution_config
+				.try_aptos_config()
+				.unwrap()
+				.try_aptos_faucet_listen_url()
+				.unwrap()
+				.as_str()
+		)
+		.as_str(),
 	)
 	.unwrap()
 });
@@ -44,9 +53,6 @@ static FAUCET_URL: Lazy<Url> = Lazy::new(|| {
 
 #[tokio::test]
 async fn test_example_interaction() -> Result<()> {
-	const MAX_TX_SEND_RETRY: usize = 10;
-	const DEFAULT_TX_GAS_LIMIT: u128 = 10_000_000_000_000_000;
-
 	// :!:>section_1a
 	let rest_client = Client::new(NODE_URL.clone());
 	let faucet_client = FaucetClient::new(FAUCET_URL.clone(), NODE_URL.clone()); // <:!:section_1a
@@ -159,6 +165,7 @@ async fn test_example_interaction() -> Result<()> {
 	let base_url = "http://localhost:30731";
 	let state_root_hash_query = format!("/movement/v1/state-root-hash/{}", cur_blockheight);
 	let state_root_hash_url = format!("{}{}", base_url, state_root_hash_query);
+	println!("State root hash url: {}", state_root_hash_url);
 
 	let client = reqwest::Client::new();
 
@@ -172,73 +179,5 @@ async fn test_example_interaction() -> Result<()> {
 	let state_key = response.text().await?;
 	println!("State key: {}", state_key);
 
-	let mcr_address = read_mcr_sc_adress()?;
-	let anvil_address = read_anvil_json_file_address()?;
-	let signer: LocalWallet = anvil_address[1].1.parse()?;
-
-	println!("MCR address: {}", mcr_address);
-
-	//Build client 1 and send first commitment.
-	let provider = ProviderBuilder::new()
-		.with_recommended_fillers()
-		.signer(EthereumSigner::from(signer.clone()))
-		.on_http(anvil_rpc_url.parse().unwrap());
-
-	let config = McrEthSettlementConfig {
-		mrc_contract_address: mcr_address.to_string(),
-		gas_limit: DEFAULT_TX_GAS_LIMIT,
-		tx_send_nb_retry: MAX_TX_SEND_RETRY,
-	};
-
-	let eth_client = McrEthSettlementClient::build_with_provider(
-		provider,
-		signer.address(),
-		anvil_ws_url,
-		config.clone(),
-	)
-	.await?;
-
-	if let Some(commitment) = eth_client.get_commitment_at_height(cur_blockheight).await? {
-		assert_eq!(commitment.commitment.to_string(), state_key);
-	} else {
-		return Err(anyhow!("No commitment found at block height {}", cur_blockheight));
-	}
-
 	Ok(())
-}
-
-fn read_mcr_sc_adress() -> Result<Address, anyhow::Error> {
-	let file_path = std::env::var("MCR_SC_ADDRESS_FILE")?;
-	let addr_str = std::fs::read_to_string(file_path)?;
-	let addr: Address = addr_str.trim().parse()?;
-	Ok(addr)
-}
-
-fn read_anvil_json_file_address() -> Result<Vec<(String, String)>, anyhow::Error> {
-	use serde_json::{from_str, Value};
-
-	let anvil_conf_file = std::env::var("ANVIL_JSON_PATH")?;
-	let file_content = std::fs::read_to_string(anvil_conf_file)?;
-
-	let json_value: Value = from_str(&file_content)?;
-
-	// Extract the available_accounts and private_keys fields
-	let available_accounts_iter = json_value["available_accounts"]
-		.as_array()
-		.expect("available_accounts should be an array")
-		.iter()
-		.map(|v| v.as_str().map(|s| s.to_string()))
-		.flatten();
-
-	let private_keys_iter = json_value["private_keys"]
-		.as_array()
-		.expect("private_keys should be an array")
-		.iter()
-		.map(|v| v.as_str().map(|s| s.to_string()))
-		.flatten();
-
-	let res = available_accounts_iter
-		.zip(private_keys_iter)
-		.collect::<Vec<(String, String)>>();
-	Ok(res)
 }

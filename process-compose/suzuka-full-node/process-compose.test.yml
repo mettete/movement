@@ -5,7 +5,8 @@ environment:
 processes:
   suzuka-client-tests:
     command: |
-      cargo test -p suzuka-client -- --test-threads=1 --nocapture 
+      set -e
+      cargo test -p suzuka-client -- --test-threads=1
     depends_on:
       suzuka-full-node:
         condition: process_healthy
@@ -14,4 +15,4 @@ processes:
       deploy-mcr:
         condition: process_healthy
     availability:
-      exit_on_end: false
+      exit_on_end: true
