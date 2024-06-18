@@ -161,6 +161,8 @@ async fn test_example_interaction() -> Result<()> {
 
 	sleep(Duration::from_secs(10)).await;
 
+	// TODO: these are unused, should be set up
+	// as part of the test config.
 	let anvil_rpc_port = "8545";
 	let anvil_rpc_url = format!("http://localhost:{anvil_rpc_port}");
 	let anvil_ws_url = format!("ws://localhost:{anvil_rpc_port}");
