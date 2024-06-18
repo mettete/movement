@@ -1,3 +1,5 @@
+#![cfg(feature = "integration-tests")]
+
 use crate::{
 	coin_client::CoinClient,
 	rest_client::{Client, FaucetClient},
