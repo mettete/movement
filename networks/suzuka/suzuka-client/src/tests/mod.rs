@@ -9,6 +9,8 @@ use std::str::FromStr;
 use tokio::time::{sleep, Duration};
 use url::Url;
 
+mod settlement_state;
+
 static SUZUKA_CONFIG: Lazy<suzuka_config::Config> = Lazy::new(|| {
 	let dot_movement = dot_movement::DotMovement::try_from_env().unwrap();
 	let path = dot_movement.get_path().join("config.toml");

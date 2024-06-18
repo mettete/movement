@@ -11176,6 +11176,14 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 name = "suzuka-client"
 version = "0.3.0"
 dependencies = [
+ "alloy-contract",
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-provider",
+ "alloy-rpc-types",
+ "alloy-signer-wallet",
+ "alloy-sol-types",
+ "alloy-transport",
  "anyhow",
  "aptos-sdk",
  "dot-movement",

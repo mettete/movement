@@ -1,26 +1,33 @@
+use super::SUZUKA_CONFIG;
+
 use alloy_network::Ethereum;
 use alloy_network::EthereumSigner;
 use alloy_primitives::Address;
+use alloy_primitives::Bytes;
 use alloy_primitives::U256;
 use alloy_provider::Provider;
 use alloy_provider::ProviderBuilder;
+use alloy_rpc_types::TransactionRequest;
 use alloy_signer_wallet::LocalWallet;
 use alloy_sol_types::sol;
 use alloy_transport::Transport;
+
 use aptos_sdk::{
 	coin_client::CoinClient,
 	rest_client::{Client, FaucetClient},
 	types::LocalAccount,
 };
+
+use url::Url;
+
 use std::env;
 use std::str::FromStr;
-use url::Url;
 
 sol!(
 	#[allow(missing_docs)]
 	#[sol(rpc)]
 	MCR,
-	"../../../protocol-units/settlement/mcr/client/abi/MCR.json"
+	"../../../protocol-units/settlement/mcr/client/abis/MCRLegacy.json"
 );
 
 #[tokio::test]
@@ -106,7 +113,9 @@ async fn test_node_settlement_state() -> anyhow::Result<()> {
 	let state_key = response.text().await?;
 	println!("state_key;{state_key:?}",);
 
-	// verify that the block state match the settlement one. Block is FIN.
+	// TODO: verify that the block state match the settlement one. Block is FIN.
+
+	loop_jh.abort();
 
 	Ok(())
 }
@@ -115,16 +124,11 @@ async fn run_alice_bob_tx() -> anyhow::Result<()> {
 	// let _ =
 	// 	tokio::time::sleep(tokio::time::Duration::from_millis(1000 * (self.id as u64))).await;
 
-	let suzuka_config = maptos_execution_util::config::Config::try_from_env()?;
-	let node_url = Url::from_str(
-		format!("http://{}", suzuka_config.aptos_config.aptos_rest_listen_url.as_str()).as_str(),
-	)
-	.unwrap();
+	let aptos_config = SUZUKA_CONFIG.execution_config.try_aptos_config()?;
+	let node_url = Url::from_str(&format!("http://{}", aptos_config.try_aptos_rest_listen_url()?))?;
 
-	let faucet_url = Url::from_str(
-		format!("http://{}", suzuka_config.aptos_config.aptos_faucet_listen_url.as_str()).as_str(),
-	)
-	.unwrap();
+	let faucet_url =
+		Url::from_str(&format!("http://{}", aptos_config.try_aptos_faucet_listen_url()?))?;
 
 	// :!:>section_1a
 	let rest_client = Client::new(node_url.clone());
@@ -207,8 +211,6 @@ fn get_mcr_sc_adress() -> Result<Address, anyhow::Error> {
 
 // Do the Genesis ceremony in Rust because if node by forge script,
 // it's never done from Rust call.
-use alloy_primitives::Bytes;
-use alloy_rpc_types::TransactionRequest;
 async fn do_genesis_ceremonial(
 	anvil_address: &[(String, String)],
 	rpc_url: &str,
