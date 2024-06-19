@@ -20,6 +20,15 @@
     flake-utils.lib.eachSystem ["aarch64-darwin" "x86_64-darwin" "x86_64-linux" "aarch64-linux"] (
 
       system: let
+
+        # nix does not handle .cargo/config.toml
+        RUSTFLAGS = if pkgs.stdenv.hostPlatform.isLinux then
+          "--cfg tokio_unstable -C force-frame-pointers=yes -C force-unwind-tables=yes -C link-arg=-fuse-ld=lld -C target-feature=+sse4.2 feature=\"vendored\""
+        else if pkgs.stdenv.hostPlatform.isWindows then
+          "--cfg tokio_unstable -C force-frame-pointers=yes -C force-unwind-tables=yes -C link-arg=/STACK:8000000"
+        else
+          "--cfg tokio_unstable -C force-frame-pointers=yes -C force-unwind-tables=yes";
+
         overrides = (builtins.fromTOML (builtins.readFile ./rust-toolchain.toml));
 
         overlays = [
@@ -114,6 +123,8 @@
         # celestia-app
         celestia-app = import ./nix/celestia-app.nix { inherit pkgs; };
 
+        movement-services = import ./nix/movement-services.nix { inherit pkgs frameworks RUSTFLAGS craneLib; };
+        
         # aptos-faucet-service
         aptos-faucet-service = import ./nix/aptos-faucet-service.nix { 
           inherit pkgs; 
@@ -135,11 +146,18 @@
       in
         with pkgs; {
 
-          packages.aptos-faucet-service = aptos-faucet-service;
+          packages = {
+            aptos-faucet-service = aptos-faucet-service;
+            celestia-node = celestia-node;
+            celestia-app = celestia-app;
 
-          packages.celestia-node = celestia-node;
-
-          packages.celestia-app = celestia-app;
+            m1-da-light-node = movement-services.m1-da-light-node;
+            monza-config = movement-services.monza-config;
+            suzuka-config = movement-services.suzuka-config;
+            monza-full-node = movement-services.monza-full-node;
+            suzuka-full-node = movement-services.suzuka-full-node;
+            wait-for-celestia-light-node = movement-services.wait-for-celestia-light-node;
+          };
           
           # Used for workaround for failing vendor dep builds in nix
           devShells.docker-build = mkShell {
@@ -163,11 +181,12 @@
             SNAPPY = if stdenv.isLinux then pkgs.snappy else null;
 
             OPENSSL_DEV = pkgs.openssl.dev;
+            LIBUSB_DEV = pkgs.libusb.dev;
             PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
             MONZA_APTOS_PATH = monza-aptos;
 
-            buildInputs = [] ++buildDependencies ++sysDependencies ++testDependencies;
-            nativeBuildInputs = [] ++buildDependencies ++sysDependencies;
+            buildInputs = [libusb] ++buildDependencies ++sysDependencies ++testDependencies;
+            nativeBuildInputs = [libusb] ++buildDependencies ++sysDependencies;
 
             shellHook = ''
               #!/bin/bash -e
