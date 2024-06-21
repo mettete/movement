@@ -76,4 +76,5 @@ in
     monza-full-node = buildPackage "monza-full-node";
     suzuka-full-node = buildPackage "suzuka-full-node";
     wait-for-celestia-light-node = buildPackage "wait-for-celestia-light-node";
+    cargoArtifacts = cargoArtifacts;
   }
