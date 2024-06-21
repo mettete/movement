@@ -21,9 +21,14 @@
 
       system: let
 
+        isArm64Linux = pkgs.stdenv.hostPlatform.system == "aarch64-linux";
+        
         # nix does not handle .cargo/config.toml
         RUSTFLAGS = if pkgs.stdenv.hostPlatform.isLinux then
-          "--cfg tokio_unstable -C force-frame-pointers=yes -C force-unwind-tables=yes -C link-arg=-fuse-ld=lld -C target-feature=+sse4.2 feature=\"vendored\""
+          if isArm64Linux then
+            "--cfg tokio_unstable -C force-frame-pointers=yes -C force-unwind-tables=yes"
+          else
+            "--cfg tokio_unstable -C force-frame-pointers=yes -C force-unwind-tables=yes -C link-arg=-fuse-ld=lld -C target-feature=+sse4.2"
         else if pkgs.stdenv.hostPlatform.isWindows then
           "--cfg tokio_unstable -C force-frame-pointers=yes -C force-unwind-tables=yes -C link-arg=/STACK:8000000"
         else
@@ -159,6 +164,28 @@
             wait-for-celestia-light-node = movement-services.wait-for-celestia-light-node;
           };
           
+          # Optionally, you can define apps to run the packages
+          apps = {
+            "m1-da-light-node" = flake-utils.lib.mkApp {
+              drv = movement-services.m1-da-light-node;
+            };
+            "monza-config" = flake-utils.lib.mkApp {
+              drv = movement-services.monza-config;
+            };
+            "suzuka-config" = flake-utils.lib.mkApp {
+              drv = movement-services.suzuka-config;
+            };
+            "monza-full-node" = flake-utils.lib.mkApp {
+              drv = movement-services.monza-full-node;
+            };
+            "suzuka-full-node" = flake-utils.lib.mkApp {
+              drv = movement-services.suzuka-full-node;
+            };
+            "wait-for-celestia-light-node" = flake-utils.lib.mkApp {
+              drv = movement-services.wait-for-celestia-light-node;
+            };
+          };
+
           # Used for workaround for failing vendor dep builds in nix
           devShells.docker-build = mkShell {
             buildInputs = [] ++buildDependencies ++sysDependencies;
@@ -185,8 +212,8 @@
             PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
             MONZA_APTOS_PATH = monza-aptos;
 
-            buildInputs = [libusb] ++buildDependencies ++sysDependencies ++testDependencies;
-            nativeBuildInputs = [libusb] ++buildDependencies ++sysDependencies;
+            buildInputs = [libusb] ++buildDependencies ++sysDependencies ++testDependencies ++movement-services.cargoArtifacts.buildInputs;
+            nativeBuildInputs = [libusb] ++buildDependencies ++sysDependencies ++movement-services.cargoArtifacts.buildInputs;
 
             shellHook = ''
               #!/bin/bash -e
