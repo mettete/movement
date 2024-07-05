@@ -20,6 +20,10 @@ path = "bin/basicalicebob.rs"
 name = "malicious_test"
 path = "bin/malicious/malicious_test.rs"
 
+[[bin]]
+name = "create_issue"
+path = "bin/create_issue.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [[bin]]

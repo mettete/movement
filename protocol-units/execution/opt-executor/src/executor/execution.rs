@@ -26,6 +26,14 @@ impl Executor {
 		&self,
 		block: ExecutableBlock,
 	) -> Result<BlockCommitment, anyhow::Error> {
+		tracing::info!(
+			"ICI execute_block begin id:{:?} num_transactions:{}",
+			block.block_id,
+			block.transactions.num_transactions()
+		);
+		// Print Tx
+		let txs = block.transactions.clone().into_txns();
+
 		let block_metadata = {
 			let metadata_access_block = block.transactions.clone();
 			let metadata_access_transactions = metadata_access_block.into_txns();
@@ -76,6 +84,7 @@ impl Executor {
 			block_executor.commit_blocks(vec![block_id], ledger_info_with_sigs)?;
 		}
 
+		tracing::info!("ICI after metadata");
 		// commit mempool transactions
 		{
 			let mut core_pool = self.core_mempool.write().await;
@@ -91,6 +100,12 @@ impl Executor {
 				}
 			}
 		}
+
+		for tx in txs {
+			let in_ledger = self.context.db.get_transaction_by_hash(tx.hash(), version, true);
+			tracing::info!("ICI execute_block with Tx: {:?} in_ledger:{in_ledger:?}", tx.hash());
+		}
+		tracing::info!("ICI after execution");
 
 		let proof = {
 			let reader = self.db.reader.clone();
@@ -294,9 +309,7 @@ mod tests {
 		// Initialize a root account using a predefined keypair and the test root address.
 		let root_account = LocalAccount::new(
 			aptos_test_root_address(),
-			AccountKey::from_private_key(
-				executor.maptos_config.chain.maptos_private_key.clone(),
-			),
+			AccountKey::from_private_key(executor.maptos_config.chain.maptos_private_key.clone()),
 			0,
 		);
 
@@ -316,10 +329,11 @@ mod tests {
 			let current_time_microseconds = chrono::Utc::now().timestamp_micros() as u64;
 
 			// Create a transaction factory with the chain ID of the executor, used for creating transactions.
-			let tx_factory = TransactionFactory::new(executor.maptos_config.chain.maptos_chain_id.clone())
-				.with_transaction_expiration_time(
-					current_time_microseconds, // current_time_microseconds + (i * 1000 * 1000 * 60 * 30) + 30,
-				);
+			let tx_factory =
+				TransactionFactory::new(executor.maptos_config.chain.maptos_chain_id.clone())
+					.with_transaction_expiration_time(
+						current_time_microseconds, // current_time_microseconds + (i * 1000 * 1000 * 60 * 30) + 30,
+					);
 
 			// Create a block metadata transaction.
 			let block_metadata = Transaction::BlockMetadata(BlockMetadata::new(
@@ -397,9 +411,7 @@ mod tests {
 		// Initialize a root account using a predefined keypair and the test root address.
 		let root_account = LocalAccount::new(
 			aptos_test_root_address(),
-			AccountKey::from_private_key(
-				executor.maptos_config.chain.maptos_private_key.clone(),
-			),
+			AccountKey::from_private_key(executor.maptos_config.chain.maptos_private_key.clone()),
 			0,
 		);
 
@@ -408,7 +420,8 @@ mod tests {
 		let mut rng = ::rand::rngs::StdRng::from_seed(seed);
 
 		// Create a transaction factory with the chain ID of the executor.
-		let tx_factory = TransactionFactory::new(executor.maptos_config.chain.maptos_chain_id.clone());
+		let tx_factory =
+			TransactionFactory::new(executor.maptos_config.chain.maptos_chain_id.clone());
 
 		// Simulate the execution of multiple blocks.
 		for _ in 0..10 {

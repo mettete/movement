@@ -86,6 +86,10 @@ impl ExecutionConfig {
 
 impl Default for ExecutionConfig {
 	fn default() -> Self {
+		println!(
+			"std::env::var(LOADTEST_NUMBER_SCENARIO):{:?}",
+			std::env::var("LOADTEST_NUMBER_SCENARIO")
+		);
 		let number_scenarios: usize = std::env::var("LOADTEST_NUMBER_SCENARIO")
 			.map_err(|err| err.to_string())
 			.and_then(|val| val.parse().map_err(|err: std::num::ParseIntError| err.to_string()))
@@ -168,15 +172,19 @@ pub fn execute_test(config: ExecutionConfig, create_scenario: Arc<scenario::Crea
 		.filter_map(|res| (res.average_execution_time_milli > 0).then_some(res))
 		.collect();
 
-	let average_exec_time = no_zero_exec_time
-		.iter()
-		.map(|res| res.average_execution_time_milli)
-		.sum::<u128>()
-		/ no_zero_exec_time.len() as u128;
+	let average_exec_time = if !no_zero_exec_time.is_empty() {
+		no_zero_exec_time
+			.iter()
+			.map(|res| res.average_execution_time_milli)
+			.sum::<u128>()
+			/ no_zero_exec_time.len() as u128
+	} else {
+		0
+	};
 	let metrics_average_exec_time = serde_json::to_string(&average_exec_time)
 		.unwrap_or("Metric  execution result serialization error.".to_string());
 	tracing::info!(target:EXEC_LOG_FILTER, metrics_average_exec_time);
-	tracing::info!("Scenarios execution average_exec_time:{metrics_average_exec_time}");
+	tracing::info!("Scenarios execution average_exec_time:{average_exec_time}");
 
 	tracing::info!("End test scenario execution.");
 }
@@ -379,14 +387,14 @@ impl ClientExecResult {
 	}
 
 	pub fn calculate_average_exec_time_milli(scenarios: &[ScenarioExecMetric]) -> u128 {
-		if !scenarios.is_empty() {
-			let ok_scenario: Vec<_> = scenarios
-				.into_iter()
-				.filter_map(|s| if s.is_ok() { Some(s.elapse_millli) } else { None })
-				.collect();
+		let ok_scenario: Vec<_> = scenarios
+			.into_iter()
+			.filter_map(|s| if s.is_ok() { Some(s.elapse_millli) } else { None })
+			.collect();
+		if !ok_scenario.is_empty() {
 			ok_scenario.iter().sum::<u128>() / ok_scenario.len() as u128
 		} else {
-			tracing::warn!("No result available average exec time is 0");
+			tracing::warn!("Client exec: No scenario executes correctly, average exec time is 0");
 			0
 		}
 	}

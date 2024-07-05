@@ -48,7 +48,7 @@ processes:
 
   suzuka-full-node:
     command: |
-      suzuka-full-node
+      RUST_LOG=info suzuka-full-node &> /home/pdelrieu/suzuka.log
     depends_on:
       m1-da-light-node:
         condition: process_healthy
@@ -60,7 +60,7 @@ processes:
   suzuka-faucet:
   
     command : |
-      suzuka-faucet-service run-simple
+      suzuka-faucet-service run-simple &> /home/pdelrieu/suzuka_faucet.log
     depends_on:
       suzuka-full-node:
         condition: process_healthy

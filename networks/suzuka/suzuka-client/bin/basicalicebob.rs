@@ -78,7 +78,8 @@ impl Scenario for BasicScenario {
 		faucet_client.fund(alice.address(), 100_000_000).await?;
 		tracing::info!("{} Before Bod create_account", self.id);
 		self.log_exec_info(&format!("{} Before Bod create_account", self.id));
-		faucet_client.create_account(bob.address()).await?;
+		//		faucet_client.create_account(bob.address()).await?;
+		faucet_client.fund(bob.address(), 100_000_000).await?;
 		tracing::info!("{} After Bod create_account", self.id);
 		self.log_exec_info(&format!("{} After Bod create_account", self.id));
 
