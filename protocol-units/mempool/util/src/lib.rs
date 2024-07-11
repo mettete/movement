@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use maptos_dof_execution::SignedTransaction;
 use movement_types::{Block, Id, Transaction};
 use std::cmp::Ordering;
 
@@ -77,7 +78,17 @@ pub trait MempoolTransactionOperations {
 
 	/// Pops the next n transactions from the mempool.
 	async fn pop_transactions(&self, n: usize) -> Result<Vec<Transaction>, anyhow::Error> {
-		let mempool_transactions = self.pop_mempool_transactions(n).await?;
+		let mut mempool_transactions = self.pop_mempool_transactions(n).await?;
+		//To test sort the Tx by seq nmber.
+		mempool_transactions.sort_by(|ta, tb| {
+			let signed_transaction_ta: SignedTransaction =
+				serde_json::from_slice(&ta.transaction.0).unwrap();
+			let signed_transaction_tb: SignedTransaction =
+				serde_json::from_slice(&tb.transaction.0).unwrap();
+			signed_transaction_ta
+				.sequence_number()
+				.cmp(&signed_transaction_tb.sequence_number())
+		});
 		Ok(mempool_transactions
 			.into_iter()
 			.map(|mempool_transaction| mempool_transaction.transaction)

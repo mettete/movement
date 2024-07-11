@@ -5,5 +5,9 @@ version = "0.0.1"
 [addresses]
 malicious_test = "_"
 
-[dependencies]
-AptosFramework = { local = "../../../../../../.movement/monza-aptos/aptos-move/framework/aptos-framework" }
+#[dependencies]
+#AptosFramework = { local = "../../../../../../.movement/monza-aptos/aptos-move/framework/aptos-framework" }
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"

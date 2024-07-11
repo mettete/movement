@@ -27,7 +27,7 @@ impl Executor {
 		block: ExecutableBlock,
 	) -> Result<BlockCommitment, anyhow::Error> {
 		tracing::info!(
-			"ICI execute_block begin id:{:?} num_transactions:{}",
+			"ICI 2mmaptos_opt_executor execute_block begin id:{:?} num_transactions:{}",
 			block.block_id,
 			block.transactions.num_transactions()
 		);
@@ -68,6 +68,16 @@ impl Executor {
 		debug!("Block execution compute the following state: {:?}", state_compute);
 
 		let version = state_compute.version();
+
+		for tx in &txs {
+			let in_ledger = self.context.db.get_transaction_by_hash(tx.hash(), version, true);
+			tracing::info!(
+				"ICI 2mmaptos_opt_executor execute_block before commit block with Tx: {:?} in_ledger:{}",
+				tx.hash(),
+				if in_ledger.is_ok() { in_ledger.as_ref().unwrap().is_some() } else { false }
+			);
+		}
+
 		debug!("Block execution computed the following version: {:?}", version);
 		let (epoch, round) = (block_metadata.epoch(), block_metadata.round());
 
@@ -83,8 +93,15 @@ impl Executor {
 			let block_executor = self.block_executor.write().await;
 			block_executor.commit_blocks(vec![block_id], ledger_info_with_sigs)?;
 		}
+		for tx in &txs {
+			let in_ledger = self.context.db.get_transaction_by_hash(tx.hash(), version, true);
+			tracing::info!(
+				"ICI 2mmaptos_opt_executor execute_block before commit Tx with Tx: {:?} in_ledger:{}",
+				tx.hash(),
+				if in_ledger.is_ok() { in_ledger.as_ref().unwrap().is_some() } else { false }
+			);
+		}
 
-		tracing::info!("ICI after metadata");
 		// commit mempool transactions
 		{
 			let mut core_pool = self.core_mempool.write().await;
@@ -93,6 +110,11 @@ impl Executor {
 					Transaction::UserTransaction(transaction) => {
 						let sender = transaction.sender();
 						let sequence_number = transaction.sequence_number();
+						tracing::info!(
+							"ICI 2mmaptos_opt_executor commit_transaction : {:?}",
+							transaction.committed_hash()
+						);
+
 						core_pool
 							.commit_transaction(&AccountAddress::from(sender), sequence_number);
 					}
@@ -101,10 +123,6 @@ impl Executor {
 			}
 		}
 
-		for tx in txs {
-			let in_ledger = self.context.db.get_transaction_by_hash(tx.hash(), version, true);
-			tracing::info!("ICI execute_block with Tx: {:?} in_ledger:{in_ledger:?}", tx.hash());
-		}
 		tracing::info!("ICI after execution");
 
 		let proof = {

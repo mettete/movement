@@ -60,7 +60,7 @@ processes:
   suzuka-faucet:
   
     command : |
-      suzuka-faucet-service run-simple &> /home/pdelrieu/suzuka_faucet.log
+      suzuka-faucet-service run-simple
     depends_on:
       suzuka-full-node:
         condition: process_healthy

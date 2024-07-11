@@ -100,11 +100,7 @@ where
 		{
 			match transaction_result {
 				Ok(transaction) => {
-					tracing::info!(
-						"Got transaction hash: {:?} {:?}",
-						transaction.clone().committed_hash(),
-						transaction
-					);
+					debug!("Got transaction: {:?}", transaction);
 
 					let serialized_transaction = serde_json::to_vec(&transaction)?;
 					transactions.push(BlobWrite { data: serialized_transaction });
@@ -124,7 +120,7 @@ where
 			let mut light_node_client = client_ptr.write().await;
 			light_node_client.batch_write(BatchWriteRequest { blobs: transactions }).await?;
 
-			tracing::info!("Wrote transactions to DA");
+			debug!("Wrote transactions to DA");
 		}
 
 		Ok(())

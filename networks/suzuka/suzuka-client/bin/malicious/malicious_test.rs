@@ -28,7 +28,7 @@ use std::path::PathBuf;
 // static SCRIPT: &[u8] =
 //     include_bytes!("move/build/malicious/bytecode_scripts/register.mv");
 
-const MOVE_SCRIPT_PATH: &str = "networks/suzuka/suzuka-client/src/bin/malicious/move";
+const MOVE_SCRIPT_PATH: &str = "networks/suzuka/suzuka-client/bin/malicious/move";
 const CHAIN_ID: u8 = 4;
 
 #[tokio::main]
@@ -45,30 +45,38 @@ async fn main() -> anyhow::Result<()> {
 
     //set execution path
     let root: PathBuf = cargo_workspace()?;
+
     let additional_path = MOVE_SCRIPT_PATH;
     let move_exe_path = root.join(additional_path);
+        println!("ici move_exe_path:{move_exe_path:?}");
 
     //init aptos only done one time
-    let init_output =
-        commander::run_command_current_dir("/bin/bash", &["aptos init --network custom --rest-url {node_url} --faucet-url {faucet_url} --assume-yes"], Some(&move_exe_path)).await?;
-    println!("{}", init_output);
+    // let aptos_init_account = LocalAccount::generate(&mut rand::rngs::OsRng);
+    // let aptos_private_key = aptos_init_account.private_key().to_encoded_string()?;
+
+    //     // let init_output =
+    // //     commander::run_command_current_dir("/bin/bash", &["aptos", "init", "--network", "custom", "--rest-url", &rpc_url.to_string(), "--faucet-url", &faucet_url.to_string(), "--assume-yes"], Some(&move_exe_path)).await?;
+    // let init_cmd = format!(" init --network custom --private-key {aptos_private_key} --rest-url {rpc_url} --faucet-url {faucet_url} --assume-yes");
+    // let init_output =
+    //     commander::run_command_current_dir("aptos", &[&init_cmd], Some(&move_exe_path)).await?;
+    // println!("{}", init_output);
 
     //Init Alice and Bob accounts
     let alice = LocalAccount::generate(&mut rand::rngs::OsRng);
     let alice_address = alice.address();
     let faucet_client = FaucetClient::new(faucet_url, rpc_url);
-    faucet_client.fund(alice.address(), 100_000_000).await?;
+    faucet_client.fund(alice.address(), 100_000_000_000).await?;
 
     //Publish MoinCoin with Alice account
     let package_path = move_exe_path.to_string_lossy();
     println!("exe_path:{}", package_path);
     let alice_private_key = alice.private_key().to_encoded_string()?;
 
-    let publish_cmd = format!("aptos move publish --private-key {alice_private_key} --sender-account {alice_address} --package-dir {package_path} --named-addresses malicious_test={alice_address} --assume-yes");
+    let publish_cmd = format!("move publish --private-key {alice_private_key} --sender-account {alice_address} --package-dir {package_path} --named-addresses malicious_test={alice_address} --assume-yes");
     println!("{}", publish_cmd);
     let publish_output =
-        commander::run_command("/bin/bash", &[&publish_cmd]).await?;
-    println!("{}", publish_output);
+        commander::run_command_current_dir("aptos", &["move", "publish", "--private-key", &alice_private_key, "--sender-account", &alice_address.to_string(), "--package-dir", &package_path, "--named-addresses", &format!("malicious_test={alice_address}"), "--assume-yes"], Some(&move_exe_path)).await?;
+    println!("Publish done : {}", publish_output);
 
     let _ = tokio::time::sleep(tokio::time::Duration::from_millis(5000));
 
@@ -85,7 +93,7 @@ async fn main() -> anyhow::Result<()> {
     //Init Bob account
     let bob = LocalAccount::generate(&mut rand::rngs::OsRng);
     let bob_address = bob.address();
-    faucet_client.fund(bob.address(), 100_000_000).await?;
+    faucet_client.fund(bob.address(), 100_000_000_000).await?;
     let mut bob_caller =  FunctionCaller::build(bob, client.clone(), chain_id).await?;
 
 
@@ -94,28 +102,28 @@ async fn main() -> anyhow::Result<()> {
             bcs::to_bytes(&alice_address).unwrap(),
             bcs::to_bytes(&(1000 as u64)).unwrap(),
         ]).await;
-    println!("RESULTTTTTTT Bob bad transfer result: {tx_result:?}",);
+    println!("RESULTTTTTTT Bob INSUFFICIENT_BALANCE_FOR_TRANSACTION_FEE result: {tx_result:?}",);
     assert!(
         tx_result.is_err(),
         "Bob INSUFFICIENT_BALANCE_FOR_TRANSACTION_FEE allowed."
     );
 
     //Alice Transfer USDT to Bod with wrong signer
-    let tx_result = bob_caller.run_function_with_signer(&alice_caller.account, "0x1::aptos_account::transfer_coins", vec![moncoin_tytag(alice_address)], vec![
+    let tx_result = alice_caller.run_function_with_signer(&bob_caller.account, "0x1::aptos_account::transfer_coins", vec![moncoin_tytag(alice_address)], vec![
             bcs::to_bytes(&bob_address).unwrap(),
             bcs::to_bytes(&(1000 as u64)).unwrap(),
         ]).await;
-    println!("RESULTTTTTTT Bob bad transfer result: {tx_result:?}",);
+    println!("RESULTTTTTTT Bob INVALID_AUTH_KEY result: {tx_result:?}",);
     assert!(
         tx_result.is_err(),
         "Bob INVALID_AUTH_KEY allowed."
     );
 
     //Transfer to Alice with the wrong arguments
-    let tx_result = bob_caller.run_function("0x1::aptos_account::transfer_coins", vec![moncoin_tytag(alice_address)], vec![
+    let tx_result = alice_caller.run_function("0x1::aptos_account::transfer_coins", vec![moncoin_tytag(alice_address)], vec![
             bcs::to_bytes(&alice_address).unwrap(),
         ]).await;
-    println!("RESULTTTTTTT Bob bad transfer result: {tx_result:?}",);
+    println!("RESULTTTTTTT Bob WRONG ARGUMENTS result: {tx_result:?}",);
     assert!(
         tx_result.is_err(),
         "WRONG ARGUMENTS allowed."

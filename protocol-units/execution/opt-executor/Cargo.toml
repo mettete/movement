@@ -65,6 +65,8 @@ maptos-execution-util = { workspace = true }
 movement-types = { workspace = true }
 aptos-logger = { workspace = true }
 
+aptos-vm-validator = { workspace = true }
+
 movement-rest = { workspace = true }
 
 dirs = { workspace = true }

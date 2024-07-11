@@ -3,7 +3,10 @@ use aptos_mempool::SubmissionStatus;
 use aptos_mempool::{core_mempool::TimelineState, MempoolClientRequest};
 use aptos_sdk::types::mempool_status::{MempoolStatus, MempoolStatusCode};
 use aptos_types::transaction::SignedTransaction;
+use aptos_vm_validator::vm_validator::TransactionValidation;
+use aptos_vm_validator::vm_validator::VMValidator;
 use futures::StreamExt;
+use std::sync::Arc;
 
 impl Executor {
 	/// Ticks the transaction reader.
@@ -23,11 +26,9 @@ impl Executor {
 							match request {
 								MempoolClientRequest::SubmitTransaction(transaction, callback) => {
 									//preexecute Tx to validate its content.
-											// let vm = AptosVM::new(
-											//     &self.get_state_view().as_move_resolver(),
-											//     /*override_is_delayed_field_optimization_capable=*/ None,
-											// );
-											// let vm_exec_result = vm.validate_transaction(txn, &self.data_store);
+									let vm_validator = VMValidator::new(Arc::clone(&self.db.reader));
+									let tx_result = vm_validator.validate_transaction(transaction.clone());
+									println!("ICI ICI TX:{:?} tx_result : {tx_result:?}", transaction.clone().committed_hash());
 
 
 									// add to the mempool
@@ -48,7 +49,7 @@ impl Executor {
 
 											},
 											_ => {
-												anyhow::bail!("Transaction not accepted: {:?}", status);
+												anyhow::bail!("Transaction: not accepted: {:?}", status);
 											}
 										}
 

@@ -148,6 +148,8 @@ aptos-vm-logging = { path = "../../../aptos-core/aptos-move/aptos-vm-logging" }
 aptos-logger = { path = "../../../aptos-core/crates/aptos-logger" }
 aptos-vm-types = { path = "../../../aptos-core/aptos-move/aptos-vm-types" }
 
+aptos-vm-validator = { path = "../../../aptos-core/vm-validator" }
+
 
 bcs = { git = "https://github.com/aptos-labs/bcs.git", rev = "d31fab9d81748e2594be5cd5cdf845786a30562d" }
 ethereum-types = "0.14.1"

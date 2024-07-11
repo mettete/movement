@@ -6913,6 +6913,7 @@ dependencies = [
  "aptos-vm-genesis",
  "aptos-vm-logging",
  "aptos-vm-types",
+ "aptos-vm-validator",
  "async-channel",
  "async-trait",
  "bcs 0.1.4",
@@ -7048,8 +7049,10 @@ name = "mempool-util"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "maptos-dof-execution",
  "movement-types",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -10919,6 +10922,7 @@ name = "suzuka-full-node"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "aptos-logger",
  "async-channel",
  "dot-movement",
  "m1-da-light-node-client",
