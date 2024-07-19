@@ -7282,6 +7282,7 @@ name = "mcr-settlement-setup"
 version = "0.3.0"
 dependencies = [
  "alloy",
+ "alloy-network",
  "alloy-primitives",
  "anyhow",
  "commander",
