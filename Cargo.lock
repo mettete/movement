@@ -11125,6 +11125,9 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 name = "suzuka-client"
 version = "0.3.0"
 dependencies = [
+ "alloy",
+ "alloy-network",
+ "alloy-primitives",
  "anyhow",
  "aptos-sdk",
  "aptos-types",
@@ -11135,9 +11138,12 @@ dependencies = [
  "commander",
  "dot-movement",
  "futures",
+ "godfig",
+ "hex",
  "itertools 0.12.1",
  "maptos-execution-util",
  "mcr-settlement-client",
+ "mcr-settlement-config",
  "once_cell",
  "rand 0.7.3",
  "rayon",

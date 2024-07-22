@@ -5,8 +5,8 @@ use crate::{
 		aptos_api_types::{TransactionOnChainData, ViewFunction},
 		Client, FaucetClient,
 	},
-	types::{chain_id::ChainId, LocalAccount},
 	transaction_builder::TransactionBuilder,
+	types::{chain_id::ChainId, LocalAccount},
 };
 use anyhow::Context;
 use aptos_sdk::crypto::ed25519::Ed25519PrivateKey;
@@ -28,6 +28,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, sync::Arc};
 use std::{thread, time};
 use url::Url;
+
+//mod settlement_state;
 
 static SUZUKA_CONFIG: Lazy<suzuka_config::Config> = Lazy::new(|| {
 	let dot_movement = dot_movement::DotMovement::try_from_env().unwrap();
@@ -184,26 +186,19 @@ async fn test_example_interaction() -> Result<(), anyhow::Error> {
 	println!("\n=== Malformed Sequence Number ===");
 	let options = TransferOptions::default();
 	let chain_id = rest_client
-            .get_index()
-            .await
-            .context("Failed to get chain ID")?
-            .inner()
-            .chain_id;
+		.get_index()
+		.await
+		.context("Failed to get chain ID")?
+		.inner()
+		.chain_id;
 	let transaction_builder = TransactionBuilder::new(
 		TransactionPayload::EntryFunction(EntryFunction::new(
 			ModuleId::new(AccountAddress::ONE, Identifier::new("coin").unwrap()),
 			Identifier::new("transfer").unwrap(),
 			vec![TypeTag::from_str(options.coin_type).unwrap()],
-			vec![
-				bcs::to_bytes(&bob.address()).unwrap(),
-				bcs::to_bytes(&(1_000 as u64)).unwrap(),
-			],
+			vec![bcs::to_bytes(&bob.address()).unwrap(), bcs::to_bytes(&(1_000 as u64)).unwrap()],
 		)),
-		SystemTime::now()
-			.duration_since(UNIX_EPOCH)
-			.unwrap()
-			.as_secs()
-			+ options.timeout_secs,
+		SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + options.timeout_secs,
 		ChainId::new(chain_id),
 	)
 	.sender(alice.address())
@@ -225,18 +220,16 @@ async fn test_example_interaction() -> Result<(), anyhow::Error> {
 
 	// second send should fail...
 	println!("Second send should fail");
-	match rest_client
-		.submit(&signed_txn)
-		.await {
+	match rest_client.submit(&signed_txn).await {
 		Ok(transaction) => {
 			println!("Transaction succeeded unexpectedly {:?}", transaction.into_inner());
 			panic!("Expected transaction to fail");
-		},	
+		}
 		Err(e) => {
 			println!("Transaction failed expectedly: {:?}", e);
 		}
 	}
-	
+
 	// ...but not crash the node.
 	// So, this should work.
 	let txn_hash = coin_client
@@ -248,7 +241,6 @@ async fn test_example_interaction() -> Result<(), anyhow::Error> {
 		.wait_for_transaction(&txn_hash)
 		.await
 		.context("Failed when waiting for the transfer transaction")?;
-
 
 	Ok(())
 }
@@ -602,11 +594,8 @@ async fn test_complex_alice_internal() -> Result<(), anyhow::Error> {
 	// 	&vec![MoveValue::Address(multisig_account.clone()), MoveValue::U64(1)]
 	// 	).await?;
 
-	
-
 	Ok(())
 }
-
 
 #[test]
 fn hey_partners_load() {
@@ -636,7 +625,6 @@ fn hey_partners_soak() {
 	tracing::info!("Hey Partners Soak Test result: {:?}", result);
 }
 
-
 fn create_hey_partners_scenario(_id: usize) -> Box<dyn Scenario> {
 	Box::new(HeyPartnersScenario)
 }
@@ -655,15 +643,14 @@ pub async fn test_hey_partners() -> Result<(), anyhow::Error> {
 }
 
 async fn test_hey_partners_internal() -> Result<(), anyhow::Error> {
-    let root: PathBuf = cargo_workspace()?;
+	let root: PathBuf = cargo_workspace()?;
 	let additional_path = "networks/suzuka/suzuka-client/src/tests/hey-partners/";
 	let combined_path = root.join(additional_path);
 
 	let test = combined_path.to_string_lossy();
 	println!("{}", test);
 
-    let output =
-		run_command("/bin/bash", &[format!("{}{}", test, "test.sh").as_str()]).await?;
-    println!("Output: {}", output);
-    Ok(())
+	let output = run_command("/bin/bash", &[format!("{}{}", test, "test.sh").as_str()]).await?;
+	println!("Output: {}", output);
+	Ok(())
 }

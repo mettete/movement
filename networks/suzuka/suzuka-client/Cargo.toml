@@ -51,14 +51,32 @@ mcr-settlement-client = { workspace = true }
 suzuka-config = { workspace = true }
 dot-movement = { workspace = true }
 
+
 [dev-dependencies]
 reqwest = { workspace = true }
 serde_json = { workspace = true }
 
 maptos-execution-util = { workspace = true }
+mcr-settlement-config = { workspace = true }
 mcr-settlement-client = { workspace = true }
 suzuka-config = { workspace = true }
 dot-movement = { workspace = true }
+
+godfig = { workspace = true }
+hex = { workspace = true }
+
+alloy = { workspace = true, features = [
+    "node-bindings",
+    "rpc-types-trace",
+    "json-rpc",
+    "rpc-client",
+    "signers",
+    "signer-yubihsm",
+    "pubsub",
+    "providers"
+]}
+alloy-network = { workspace = true }
+alloy-primitives = { workspace = true }
 
 [lints]
 workspace = true

@@ -43,7 +43,7 @@ impl Memseq<RocksdbMempool> {
 		)?;
 		let mempool = Arc::new(RwLock::new(mempool));
 		let parent_block = Arc::new(RwLock::new(Id::default()));
-		Ok(Self::new(mempool, 10, parent_block, 1000))
+		Ok(Self::new(mempool, 1024, parent_block, 500))
 	}
 
 	pub fn try_from_env_toml_file() -> Result<Self, anyhow::Error> {
@@ -283,7 +283,7 @@ pub mod test {
 		let path = dir.path().to_path_buf();
 		let memseq = Memseq::try_move_rocks(path)?;
 
-		let transaction : Transaction = Transaction::new(vec![1, 2, 3], 0);
+		let transaction: Transaction = Transaction::new(vec![1, 2, 3], 0);
 		memseq.publish(transaction.clone()).await?;
 
 		let block = memseq.wait_for_next_block().await?;
@@ -302,7 +302,7 @@ pub mod test {
 
 		let mut transactions = Vec::new();
 		for i in 0..block_size * 2 {
-			let transaction : Transaction = Transaction::new( vec![i as u8], 0);
+			let transaction: Transaction = Transaction::new(vec![i as u8], 0);
 			memseq.publish(transaction.clone()).await?;
 			transactions.push(transaction);
 		}
@@ -343,7 +343,7 @@ pub mod test {
 
 			// add half of the transactions
 			for i in 0..block_size / 2 {
-				let transaction : Transaction = Transaction::new(vec![i as u8], 0);
+				let transaction: Transaction = Transaction::new(vec![i as u8], 0);
 				memseq.publish(transaction.clone()).await?;
 			}
 
@@ -351,7 +351,7 @@ pub mod test {
 
 			// add the rest of the transactions
 			for i in block_size / 2..block_size - 2 {
-				let transaction : Transaction = Transaction::new(vec![i as u8], 0);
+				let transaction: Transaction = Transaction::new(vec![i as u8], 0);
 				memseq.publish(transaction.clone()).await?;
 			}
 

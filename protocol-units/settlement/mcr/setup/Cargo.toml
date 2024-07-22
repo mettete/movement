@@ -11,13 +11,13 @@ publish.workspace = true
 rust-version.workspace = true
 
 
-[[bin]]
-name = "one_validator_ceremonial"
-path = "bin/one_validator_genesis_ceremonial.rs"
+#[[bin]]
+#name = "one_validator_ceremonial"
+#path = "bin/one_validator_genesis_ceremonial.rs"
 
-[[bin]]
-name = "two_validator_ceremonial"
-path = "bin/two_validator_genesis_ceremonial.rs"
+#[[bin]]
+#name = "two_validator_ceremonial"
+#path = "bin/two_validator_genesis_ceremonial.rs"
 
 
 [dependencies]

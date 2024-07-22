@@ -1,87 +1,173 @@
-use alloy_network::EthereumSigner;
+use alloy::providers::ProviderBuilder;
+use alloy::signers::local::PrivateKeySigner;
+use alloy_network::EthereumWallet;
 use alloy_primitives::Address;
 use alloy_primitives::U256;
-use alloy_provider::ProviderBuilder;
-use alloy_signer_wallet::LocalWallet;
-use mcr_settlement_setup::stake_genesis;
-use mcr_settlement_setup::MCR;
+use anyhow::Context;
+use godfig::{backend::config_file::ConfigFile, Godfig};
+use mcr_settlement_client::eth_client::{MOVEToken, MovementStaking, MCR};
+use mcr_settlement_config::Config;
+use std::str::FromStr;
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-	//load local env.
-	let dot_movement = dot_movement::DotMovement::try_from_env()?;
-	let suzuka_config = dot_movement.try_get_config_from_json::<suzuka_config::Config>()?;
+	use tracing_subscriber::EnvFilter;
 
-	let mcr_address: Address = suzuka_config.mcr.mcr_contract_address.parse()?;
-	do_genesis_ceremonial_one_validator(
-		mcr_address,
-		&suzuka_config.mcr.test_local.as_ref().unwrap().anvil_keys,
-		&suzuka_config.mcr.rpc_url.as_ref().unwrap(),
+	tracing_subscriber::fmt()
+		.with_env_filter(
+			EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+		)
+		.init();
+
+	let dot_movement = dot_movement::DotMovement::try_from_env()?;
+	let config_file = dot_movement.try_get_or_create_config_file().await?;
+
+	// get a matching godfig object
+	let godfig: Godfig<Config, ConfigFile> =
+		Godfig::new(ConfigFile::new(config_file), vec!["mcr_settlement".to_string()]);
+	let config: Config = godfig.try_wait_for_ready().await?;
+	let rpc_url = config.eth_rpc_connection_url();
+
+	let testing_config = config.testing.as_ref().context("Testing config not defined.")?;
+	run_genesis_ceremony(
+		&config,
+		PrivateKeySigner::from_str(&testing_config.mcr_testing_admin_account_private_key)?,
+		&rpc_url,
+		Address::from_str(&testing_config.move_token_contract_address)?,
+		Address::from_str(&testing_config.movement_staking_contract_address)?,
+		Address::from_str(&config.settle.mcr_contract_address)?,
 	)
 	.await?;
 	Ok(())
 }
 
-async fn do_genesis_ceremonial_one_validator(
-	mcr_address: Address,
-	anvil_address: &[mcr_settlement_config::anvil::AnvilAddressEntry],
+async fn run_genesis_ceremony(
+	config: &Config,
+	governor: PrivateKeySigner,
 	rpc_url: &str,
+	move_token_address: Address,
+	staking_address: Address,
+	mcr_address: Address,
 ) -> Result<(), anyhow::Error> {
-	//Define Signer. Signer1 is the MCRSettlement client
-	let signer1: LocalWallet = anvil_address[0].private_key.parse()?;
-	let signer1_addr: Address = anvil_address[0].address.parse()?;
-	tracing::info!("Genesis Main staking signer1_addr:{signer1_addr}");
-	let signer1_rpc_provider = ProviderBuilder::new()
+	// Build alice client for MOVEToken, MCR, and staking
+	let alice: PrivateKeySigner = config
+		.testing
+		.as_ref()
+		.context("Testing config not defined.")?
+		.well_known_account_private_keys
+		.get(1)
+		.context("No well known account")?
+		.parse()?;
+	let alice_address = alice.address();
+	let alice_rpc_provider = ProviderBuilder::new()
 		.with_recommended_fillers()
-		.signer(EthereumSigner::from(signer1))
-		.on_http(rpc_url.parse()?);
-	let signer1_contract = MCR::new(mcr_address, &signer1_rpc_provider);
+		.wallet(EthereumWallet::from(alice.clone()))
+		.on_builtin(&rpc_url)
+		.await?;
+	let alice_staking = MovementStaking::new(staking_address, &alice_rpc_provider);
+	let alice_move_token = MOVEToken::new(move_token_address, &alice_rpc_provider);
 
-	stake_genesis(
-		&signer1_rpc_provider,
-		&signer1_contract,
-		mcr_address,
-		signer1_addr,
-		95_000_000_000_000_000_000,
-	)
-	.await?;
-
-	let signer2: LocalWallet = anvil_address[1].private_key.parse()?;
-	let signer2_addr: Address = anvil_address[1].address.parse()?;
-	let signer2_rpc_provider = ProviderBuilder::new()
+	// Build bob client for MOVEToken, MCR, and staking
+	let bob: PrivateKeySigner = config
+		.testing
+		.as_ref()
+		.context("Testing config not defined.")?
+		.well_known_account_private_keys
+		.get(2)
+		.context("No well known account")?
+		.parse()?;
+	let bob_address = bob.address();
+	let bob_rpc_provider = ProviderBuilder::new()
 		.with_recommended_fillers()
-		.signer(EthereumSigner::from(signer2))
-		.on_http(rpc_url.parse()?);
-	let signer2_contract = MCR::new(mcr_address, &signer2_rpc_provider);
+		.wallet(EthereumWallet::from(bob.clone()))
+		.on_builtin(&rpc_url)
+		.await?;
+	let bob_staking = MovementStaking::new(staking_address, &bob_rpc_provider);
+	let bob_move_token = MOVEToken::new(move_token_address, &bob_rpc_provider);
 
-	// Init staking
-	// Build a transaction to set the values.
-	stake_genesis(
-		&signer2_rpc_provider,
-		&signer2_contract,
-		mcr_address,
-		signer2_addr,
-		6_000_000_000_000_000_000,
-	)
-	.await?;
+	// Build MCR admin client to declare Alice and Bob
+	let governor_rpc_provider = ProviderBuilder::new()
+		.with_recommended_fillers()
+		.wallet(EthereumWallet::from(governor.clone()))
+		.on_builtin(&rpc_url)
+		.await?;
+	let governor_token = MOVEToken::new(move_token_address, &governor_rpc_provider);
+	let governor_mcr = MCR::new(mcr_address, &governor_rpc_provider);
+	let governor_staking = MovementStaking::new(staking_address, &governor_rpc_provider);
 
-	let MCR::hasGenesisCeremonyEndedReturn { _0: has_genesis_ceremony_ended } =
-		signer2_contract.hasGenesisCeremonyEnded().call().await?;
-	let ceremony: bool = has_genesis_ceremony_ended.try_into().unwrap();
-	assert!(ceremony);
+	// Allow Alice and Bod to stake by adding to white list.
+	governor_staking
+		.whitelistAddress(alice_address)
+		.send()
+		.await?
+		.watch()
+		.await
+		.context("Governor failed to whilelist alice")?;
+	governor_staking
+		.whitelistAddress(bob_address)
+		.send()
+		.await?
+		.watch()
+		.await
+		.context("Governor failed to whilelist Bod")?;
 
-	// Post commitment at height 1 because node commitment starts at height 2.
-	let call_builder = signer1_contract.createBlockCommitment(
-		U256::from(1),
-		alloy_primitives::FixedBytes([1; 32].try_into()?),
-		alloy_primitives::FixedBytes([2; 32].try_into()?),
-	);
-	let MCR::createBlockCommitmentReturn { _0: eth_block_commitment } = call_builder.call().await?;
+	// alice stakes for mcr
+	governor_token
+		.mint(alice_address, U256::from(100))
+		.send()
+		.await?
+		.watch()
+		.await
+		.context("Governor failed to mint for alice")?;
+	alice_move_token
+		.approve(staking_address, U256::from(95))
+		.send()
+		.await?
+		.watch()
+		.await
+		.context("Alice failed to approve MCR")?;
+	alice_staking
+		.stake(mcr_address, move_token_address, U256::from(95))
+		.send()
+		.await?
+		.watch()
+		.await
+		.context("Alice failed to stake for MCR")?;
 
-	let call_builder = signer1_contract.submitBlockCommitment(eth_block_commitment);
-	let call_builder = call_builder.clone().gas(3_000_000);
-	let pending_tx = call_builder.send().await?;
-	let receipt = pending_tx.get_receipt().await?;
+	// bob stakes for mcr
+	governor_token
+		.mint(bob.address(), U256::from(100))
+		.send()
+		.await?
+		.watch()
+		.await
+		.context("Governor failed to mint for bob")?;
+	bob_move_token
+		.approve(staking_address, U256::from(5))
+		.send()
+		.await?
+		.watch()
+		.await
+		.context("Bob failed to approve MCR")?;
+	bob_staking
+		.stake(mcr_address, move_token_address, U256::from(5))
+		.send()
+		.await?
+		.watch()
+		.await
+		.context("Bob failed to stake for MCR")?;
+
+	// mcr accepts the genesis
+	info!("MCR accepts the genesis");
+	governor_mcr
+		.acceptGenesisCeremony()
+		.send()
+		.await?
+		.watch()
+		.await
+		.context("Governor failed to accept genesis ceremony")?;
+	info!("mcr accepted");
 
 	Ok(())
 }

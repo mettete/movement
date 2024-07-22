@@ -112,7 +112,7 @@ impl
 			.await
 			.context("Failed to create the RPC provider for the MCR settlement client")?;
 
-		let mut client = Client::build_with_provider(
+		let client = Client::build_with_provider(
 			rpc_provider,
 			ws_url,
 			signer_address,
