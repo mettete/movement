@@ -55,13 +55,14 @@ impl Config {
 
 impl Default for Config {
 	fn default() -> Self {
-		Config {
+		let conf = Config {
 			eth_connection: common::eth_connection::Config::default(),
 			settle: common::settlement::Config::default(),
 			transactions: common::transactions::Config::default(),
 			maybe_run_local: maybe_run_local(),
 			deploy: maybe_deploy(),
 			testing: maybe_testing(),
-		}
+		};
+		conf
 	}
 }

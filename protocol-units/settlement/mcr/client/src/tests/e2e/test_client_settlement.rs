@@ -223,7 +223,7 @@ pub async fn test_client_settlement() -> Result<(), anyhow::Error> {
 
 	// get a matching godfig object
 	let godfig: Godfig<Config, ConfigFile> =
-		Godfig::new(ConfigFile::new(config_file), vec!["mcr_settlement".to_string()]);
+		Godfig::new(ConfigFile::new(config_file), vec!["mcr".to_string()]);
 	let config: Config = godfig.try_wait_for_ready().await?;
 	let rpc_url = config.eth_rpc_connection_url();
 

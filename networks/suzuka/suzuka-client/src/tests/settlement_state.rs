@@ -13,37 +13,34 @@ use alloy_network::EthereumWallet;
 use anyhow::Context;
 use godfig::{backend::config_file::ConfigFile, Godfig};
 use mcr_settlement_client::eth_client::{MOVEToken, MovementStaking, MCR};
-use mcr_settlement_config::Config;
+use mcr_settlement_config::Config as McrConfig;
 use std::str::FromStr;
+use suzuka_config::Config as SuzukaConfig;
 use tracing::info;
 
 async fn run_genesis_ceremony(
-	config: &Config,
+	config: &McrConfig,
 	governor: PrivateKeySigner,
 	rpc_url: &str,
 	move_token_address: Address,
 	staking_address: Address,
 	mcr_address: Address,
 ) -> Result<(), anyhow::Error> {
-	// Build alice client for MOVEToken, MCR, and staking
-	let alice: PrivateKeySigner = config
-		.testing
-		.as_ref()
-		.context("Testing config not defined.")?
-		.well_known_account_private_keys
-		.get(1)
-		.context("No well known account")?
-		.parse()?;
-	let alice_address = alice.address();
-	let alice_rpc_provider = ProviderBuilder::new()
+	// Build validator client for MOVEToken, MCR, and staking
+	// Validator is the e2e started node that we test.
+	let validator: PrivateKeySigner = config.settle.signer_private_key.clone().parse()?;
+	let validator_address = validator.address();
+	let validator_rpc_provider = ProviderBuilder::new()
 		.with_recommended_fillers()
-		.wallet(EthereumWallet::from(alice.clone()))
+		.wallet(EthereumWallet::from(validator.clone()))
 		.on_builtin(&rpc_url)
 		.await?;
-	let alice_staking = MovementStaking::new(staking_address, &alice_rpc_provider);
-	let alice_move_token = MOVEToken::new(move_token_address, &alice_rpc_provider);
+	let validator_staking = MovementStaking::new(staking_address, &validator_rpc_provider);
+	let validator_move_token = MOVEToken::new(move_token_address, &validator_rpc_provider);
 
 	// Build bob client for MOVEToken, MCR, and staking
+	// Bod act as another validator that we don't test.
+	// It's to have at least 2 staking validator.
 	let bob: PrivateKeySigner = config
 		.testing
 		.as_ref()
@@ -61,7 +58,7 @@ async fn run_genesis_ceremony(
 	let bob_staking = MovementStaking::new(staking_address, &bob_rpc_provider);
 	let bob_move_token = MOVEToken::new(move_token_address, &bob_rpc_provider);
 
-	// Build MCR admin client to declare Alice and Bob
+	// Build MCR admin client to declare Validator and Bob
 	let governor_rpc_provider = ProviderBuilder::new()
 		.with_recommended_fillers()
 		.wallet(EthereumWallet::from(governor.clone()))
@@ -71,14 +68,14 @@ async fn run_genesis_ceremony(
 	let governor_mcr = MCR::new(mcr_address, &governor_rpc_provider);
 	let governor_staking = MovementStaking::new(staking_address, &governor_rpc_provider);
 
-	// Allow Alice and Bod to stake by adding to white list.
+	// Allow Validator and Bod to stake by adding to white list.
 	governor_staking
-		.whitelistAddress(alice_address)
+		.whitelistAddress(validator_address)
 		.send()
 		.await?
 		.watch()
 		.await
-		.context("Governor failed to whilelist alice")?;
+		.context("Governor failed to whilelist validator")?;
 	governor_staking
 		.whitelistAddress(bob_address)
 		.send()
@@ -88,31 +85,66 @@ async fn run_genesis_ceremony(
 		.context("Governor failed to whilelist Bod")?;
 
 	// alice stakes for mcr
+	info!("Validator stakes for MCR");
+	let token_name = governor_token.name().call().await.context("Failed to get token name")?;
+	info!("Token name: {}", token_name._0);
+
+	// debug: this is showing up correctly
+	let has_minter_role = governor_token
+		.hasMinterRole(governor.address())
+		.call()
+		.await
+		.context("Failed to check if governor has minter role")?;
+	info!("Governor Has minter role for governor: {}", has_minter_role._0);
+
+	let has_minter_role_from_alice = validator_move_token
+		.hasMinterRole(governor.address())
+		.call()
+		.await
+		.context("Failed to check if governor has minter role")?;
+	info!("Governoe Has minter role for Validator: {}", has_minter_role_from_alice._0);
+
+	//info!("config chain_id: {}",config.eth_chain_id.clone().to_string());
+	//info!("governor chain_id: {}", governor_rpc_provider.get_chain_id().await.context("Failed to get chain id")?.to_string());
+
+	// debug: this is showing up correctly
+	let alice_hash_minter_role = governor_token
+		.hasMinterRole(validator_address)
+		.call()
+		.await
+		.context("Failed to check if alice has minter role")?;
+	info!("Validator has minter role for governor: {}", alice_hash_minter_role._0);
+
+	// validator stakes for mcr
 	governor_token
-		.mint(alice_address, U256::from(100))
+		.mint(validator_address, U256::from(100))
+		//		.gas(100000)
 		.send()
 		.await?
 		.watch()
 		.await
-		.context("Governor failed to mint for alice")?;
-	alice_move_token
+		.context("Governor failed to mint for validator")?;
+	validator_move_token
 		.approve(staking_address, U256::from(95))
+		.gas(5000000)
 		.send()
 		.await?
 		.watch()
 		.await
-		.context("Alice failed to approve MCR")?;
-	alice_staking
+		.context("Validator failed to approve MCR")?;
+	validator_staking
 		.stake(mcr_address, move_token_address, U256::from(95))
+		.gas(100000)
 		.send()
 		.await?
 		.watch()
 		.await
-		.context("Alice failed to stake for MCR")?;
+		.context("Validator failed to stake for MCR")?;
 
 	// bob stakes for mcr
 	governor_token
 		.mint(bob.address(), U256::from(100))
+		.gas(100000)
 		.send()
 		.await?
 		.watch()
@@ -120,6 +152,7 @@ async fn run_genesis_ceremony(
 		.context("Governor failed to mint for bob")?;
 	bob_move_token
 		.approve(staking_address, U256::from(5))
+		.gas(100000)
 		.send()
 		.await?
 		.watch()
@@ -127,6 +160,7 @@ async fn run_genesis_ceremony(
 		.context("Bob failed to approve MCR")?;
 	bob_staking
 		.stake(mcr_address, move_token_address, U256::from(5))
+		.gas(100000)
 		.send()
 		.await?
 		.watch()
@@ -137,6 +171,7 @@ async fn run_genesis_ceremony(
 	info!("MCR accepts the genesis");
 	governor_mcr
 		.acceptGenesisCeremony()
+		.gas(100000)
 		.send()
 		.await?
 		.watch()
@@ -157,28 +192,39 @@ async fn test_node_settlement_state() -> anyhow::Result<()> {
 		)
 		.init();
 
+	info!("Begin test_client_settlement");
+
 	let dot_movement = dot_movement::DotMovement::try_from_env()?;
 	let config_file = dot_movement.try_get_or_create_config_file().await?;
 
 	// get a matching godfig object
-	let godfig: Godfig<Config, ConfigFile> =
-		Godfig::new(ConfigFile::new(config_file), vec!["mcr_settlement".to_string()]);
-	let config: Config = godfig.try_wait_for_ready().await?;
-	let rpc_url = config.eth_rpc_connection_url();
+	let godfig: Godfig<SuzukaConfig, ConfigFile> =
+		Godfig::new(ConfigFile::new(config_file), vec![]);
+	let config: SuzukaConfig = godfig.try_wait_for_ready().await?;
 
-	let testing_config = config.testing.as_ref().context("Testing config not defined.")?;
+	let rpc_url = config.mcr.eth_rpc_connection_url();
+
+	let testing_config = config.mcr.testing.as_ref().context("Testing config not defined.")?;
 	run_genesis_ceremony(
-		&config,
+		&config.mcr,
 		PrivateKeySigner::from_str(&testing_config.mcr_testing_admin_account_private_key)?,
 		&rpc_url,
 		Address::from_str(&testing_config.move_token_contract_address)?,
 		Address::from_str(&testing_config.movement_staking_contract_address)?,
-		Address::from_str(&config.settle.mcr_contract_address)?,
+		Address::from_str(&config.mcr.settle.mcr_contract_address)?,
 	)
 	.await?;
 
-	let node_url = config.execution_config.maptos_config.client.get_rest_url()?;
-	let faucet_url = config.execution_config.maptos_config.client.get_faucet_url()?;
+	let connection_host =
+		config.execution_config.maptos_config.client.maptos_rest_connection_hostname;
+	let connection_port = config.execution_config.maptos_config.client.maptos_rest_connection_port;
+	let node_url: Url = format!("http://{}:{}", connection_host, connection_port).parse()?;
+
+	let connection_host =
+		config.execution_config.maptos_config.faucet.maptos_faucet_rest_listen_hostname;
+	let connection_port =
+		config.execution_config.maptos_config.faucet.maptos_faucet_rest_listen_port;
+	let faucet_url: Url = format!("http://{}:{}", connection_host, connection_port).parse()?;
 
 	//1) Start Alice an Bod transfer transactions.
 	// Loop on Alice and Bod transfer to produce Tx and block
@@ -211,25 +257,26 @@ async fn test_node_settlement_state() -> anyhow::Result<()> {
 	let cur_blockheight = rest_client.get_ledger_information().await?.state().block_height;
 
 	// Init smart contract connection
-	let mcr_address: Address = config.settle.mcr_contract_address.trim().parse()?;
+	let mcr_address: Address = config.mcr.settle.mcr_contract_address.trim().parse()?;
 
-	// Define Signers. Ceremony defines 2 signers (index 0 and 1). The first has 95% of the stakes.
-	let signer_private_key = config.settle.signer_private_key.clone();
-	let signer = signer_private_key.parse::<PrivateKeySigner>()?;
-	let signer_address = signer.address();
+	// Define Signers. Ceremony defines 2 signers (index 1 and 2). The first has 95% of the stakes.
+	//
+	let validator_private_key = config.mcr.settle.signer_private_key.clone();
+	let validator_private_key = validator_private_key.parse::<PrivateKeySigner>()?;
+	let validator_address = validator_private_key.address();
 	let provider_client = ProviderBuilder::new()
 		.with_recommended_fillers()
-		.wallet(EthereumWallet::from(alice.clone()))
+		.wallet(EthereumWallet::from(validator_private_key.clone()))
 		.on_builtin(&rpc_url)
 		.await?;
-	let contract = MCR::new(mcr_address, &provider_client);
+	let validator_contract = MCR::new(mcr_address, &provider_client);
 
 	// Get the height for this commitment using on-chain commitment.
 	let mut commitment_height = 0;
 	for index in (cur_blockheight.saturating_sub(5)..=cur_blockheight).rev() {
 		let MCR::getValidatorCommitmentAtBlockHeightReturn { _0: onchain_commitment_at_height } =
-			contract
-				.getValidatorCommitmentAtBlockHeight(U256::from(index), signer_address)
+			validator_contract
+				.getValidatorCommitmentAtBlockHeight(U256::from(index), validator_address)
 				.call()
 				.await?;
 		let onchain_commitment_str = hex::encode(&onchain_commitment_at_height.commitment);
@@ -244,8 +291,8 @@ async fn test_node_settlement_state() -> anyhow::Result<()> {
 	// Get current fin state.
 	let finview_node_url = format!(
 		"{}:{}",
-		suzuka_config.execution_config.maptos_config.fin.fin_rest_listen_hostname,
-		suzuka_config.execution_config.maptos_config.fin.fin_rest_listen_port,
+		config.execution_config.maptos_config.fin.fin_rest_listen_hostname,
+		config.execution_config.maptos_config.fin.fin_rest_listen_port,
 	);
 	let fin_state_root_hash_query = "/movement/v1/get-finalized-block-info";
 	let fin_state_root_hash_url =
@@ -273,7 +320,7 @@ async fn test_node_settlement_state() -> anyhow::Result<()> {
 		// Try to get an accepted commitment
 		let MCR::getAcceptedCommitmentAtBlockHeightReturn {
 			_0: get_accepted_commitment_at_block_height,
-		} = contract
+		} = validator_contract
 			.getAcceptedCommitmentAtBlockHeight(U256::from(commitment_height))
 			.call()
 			.await?;
@@ -303,16 +350,16 @@ async fn run_alice_bob_tx(node_url: &Url, faucet_url: &Url) -> anyhow::Result<()
 	faucet_client.fund(alice.address(), 100_000_000).await?;
 	faucet_client.fund(bob.address(), 100_000_000).await?;
 	let _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-	// Have Alice send Bob some coins.
-	let txn_hash = coin_client.transfer(&mut alice, bob.address(), 1_000, None).await?;
-	rest_client.wait_for_transaction(&txn_hash).await?;
+	loop {
+		// Have Alice send Bob some coins.
+		let txn_hash = coin_client.transfer(&mut alice, bob.address(), 1_000, None).await?;
+		rest_client.wait_for_transaction(&txn_hash).await?;
 
-	let _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-	// Have Bod send Alice some more coins.
-	let txn_hash = coin_client.transfer(&mut bob, alice.address(), 1_000, None).await?;
-	rest_client.wait_for_transaction(&txn_hash).await?;
+		let _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+		// Have Bod send Alice some more coins.
+		let txn_hash = coin_client.transfer(&mut bob, alice.address(), 1_000, None).await?;
+		rest_client.wait_for_transaction(&txn_hash).await?;
 
-	let _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-	Ok(())
+		let _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+	}
 }

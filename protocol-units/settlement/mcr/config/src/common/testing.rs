@@ -44,7 +44,11 @@ env_short_default!(
 // );
 
 pub fn maybe_testing() -> Option<Config> {
-    std::env::var("MAYBE_TESTING_MCR").ok().map(|_| Config::default())
+    println!("mcr config maybe_testing {:?}", std::env::var("MAYBE_TESTING_MCR"));
+    println!("mcr config MAYBE_RUN_LOCAL {:?}", std::env::var("MAYBE_RUN_LOCAL"));
+    let ret = std::env::var("MAYBE_TESTING_MCR").ok().map(|_| Config::default());
+    println!("mcr config ret {:?}", ret);
+    ret
 }
 
 impl Default for Config {

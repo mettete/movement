@@ -29,7 +29,7 @@ use std::{fs, sync::Arc};
 use std::{thread, time};
 use url::Url;
 
-//mod settlement_state;
+mod settlement_state;
 
 static SUZUKA_CONFIG: Lazy<suzuka_config::Config> = Lazy::new(|| {
 	let dot_movement = dot_movement::DotMovement::try_from_env().unwrap();

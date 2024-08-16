@@ -57,6 +57,11 @@ impl LightNodeV1 {
 		let block = self.memseq.wait_for_next_block().await?;
 		match block {
 			Some(block) => {
+				info!(
+					"Built block {:?} with {:?} transactions",
+					block.id(),
+					block.transactions.len()
+				);
 				let block_blob = self.pass_through.create_new_celestia_blob(
 					serde_json::to_vec(&block)
 						.map_err(|e| anyhow::anyhow!("Failed to serialize block: {}", e))?,
@@ -77,9 +82,7 @@ impl LightNodeV1 {
 		loop {
 			// build the next block from the blobs
 			self.tick_block_proposer().await?;
-
-			// sleep for a while
-			tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+			tokio::task::yield_now().await;
 		}
 
 		Ok(())
@@ -202,11 +205,11 @@ impl LightNodeService for LightNodeV1 {
 		// make transactions from the blobs
 		let mut transactions = Vec::new();
 		for blob in blobs_for_submission {
-			let transaction : Transaction = serde_json::from_slice(&blob.data)
+			let transaction: Transaction = serde_json::from_slice(&blob.data)
 				.map_err(|e| tonic::Status::internal(e.to_string()))?;
 			transactions.push(transaction);
 		}
-		
+
 		// publish the transactions
 		for transaction in transactions {
 			debug!("Publishing transaction: {:?}", transaction.id());

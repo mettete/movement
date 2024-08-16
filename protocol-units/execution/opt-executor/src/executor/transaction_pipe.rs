@@ -45,14 +45,18 @@ impl Executor {
 								MempoolClientRequest::SubmitTransaction(transaction, callback) => {
 									// Pre-execute Tx to validate its content.
 									// Re-create the validator for each Tx because it uses a frozen version of the ledger.
+									//let start_time = std::time::Instant::now();
 									let vm_validator = VMValidator::new(Arc::clone(&self.db.reader));
 									let tx_result = vm_validator.validate_transaction(transaction.clone())?;
+									//let elapse = start_time.elapsed().as_millis();
 
 									let status = if let Some(vm_status) = tx_result.status() {
+										tracing::info!("Tx :{} prevalidation failed :{vm_status:?}", transaction.committed_hash());
 										// If the verification failed, return the error status.
 										let ms = MempoolStatus::new(MempoolStatusCode::VmError);
 										(ms, Some(vm_status))
 									} else {
+										tracing::info!("Tx :{} after prevalidate", transaction.committed_hash());
 										// add to the mempool
 										let mut core_mempool = self.core_mempool.write().await;
 
