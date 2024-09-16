@@ -11,7 +11,9 @@ module atomic_bridge::atomic_bridge_counterparty {
     use aptos_framework::timestamp;
     use aptos_framework::aptos_hash::keccak256;
     use aptos_std::smart_table::{Self, SmartTable};
-    use moveth::moveth;
+    use aptos_framework::coin;
+    use aptos_framework::aptos_coin;
+    use aptos_framework::aptos_coin::AptosCoin;
 
     const LOCKED: u8 = 1;
     const COMPLETED: u8 = 2;
@@ -90,14 +92,10 @@ module atomic_bridge::atomic_bridge_counterparty {
         });
     }
 
-    public(friend) fun mint_moveth(to: address, amount: u64) acquires BridgeConfig {
+    public(friend) fun transfer_aptoscoin(to: address, amount: u64) acquires BridgeConfig {
         let config = borrow_global<BridgeConfig>(@atomic_bridge);
-        moveth::mint(&account::create_signer_with_capability(&config.signer_cap), to, amount);
-    }
-
-    public(friend) fun burn_moveth(from: address, amount: u64) acquires BridgeConfig {
-        let config = borrow_global<BridgeConfig>(@atomic_bridge);
-        moveth::burn(&account::create_signer_with_capability(&config.signer_cap), from, amount);
+        let signer = account::create_signer_with_capability(&config.signer_cap);  
+        aptos_framework::coin::transfer<AptosCoin>(&signer, to, amount);
     }
 
     #[view]
@@ -169,8 +167,8 @@ module atomic_bridge::atomic_bridge_counterparty {
         assert!(computed_hash == bridge_transfer.hash_lock, EWRONG_PREIMAGE);
         assert!(bridge_transfer.state == LOCKED, ETRANSFER_NOT_LOCKED);
         bridge_transfer.state = COMPLETED;
-
-        moveth::mint(&resource_signer, bridge_transfer.recipient, bridge_transfer.amount);
+        
+        coin::transfer<aptos_coin::AptosCoin>(&resource_signer, bridge_transfer.recipient, bridge_transfer.amount);
 
         event::emit_event(&mut store.bridge_transfer_completed_events, BridgeTransferCompletedEvent {
                 bridge_transfer_id: copy bridge_transfer_id,
@@ -236,11 +234,9 @@ module atomic_bridge::atomic_bridge_counterparty {
         set_up_test(origin_account, &resource_addr);
 
         timestamp::set_time_has_started_for_testing(&aptos_framework);
-        moveth::init_for_test(moveth);
         let receiver_address = @0xdada;
         let originator = b"0x123"; //In real world this would be an ethereum address
         let recipient = @0xface; 
-        let asset = moveth::metadata();
         
         let bridge_transfer_id = b"transfer1";
         let pre_image = b"secret";
@@ -299,11 +295,9 @@ module atomic_bridge::atomic_bridge_counterparty {
         set_up_test(origin_account, &resource_addr);
 
         timestamp::set_time_has_started_for_testing(&aptos_framework);
-        moveth::init_for_test(moveth);
         let receiver_address = @0xdada;
         let originator = b"0x123"; //In real world this would be an ethereum address
         let recipient = @0xface; 
-        let asset = moveth::metadata();
         
         let bridge_transfer_id = b"transfer1";
         let pre_image = b"secret";
@@ -338,11 +332,10 @@ module atomic_bridge::atomic_bridge_counterparty {
         set_up_test(origin_account, &resource_addr);
 
         timestamp::set_time_has_started_for_testing(&aptos_framework);
-        moveth::init_for_test(moveth);
         let receiver_address = @0xdada;
         let originator = b"0x123"; //In real world this would be an ethereum address
         let recipient = @0xface; 
-        let asset = moveth::metadata();
+
         
         let bridge_transfer_id = b"transfer1";
         let pre_image = b"secret";
