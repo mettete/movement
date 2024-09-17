@@ -220,7 +220,26 @@ module atomic_bridge::atomic_bridge_initiator {
         atomic_bridge_counterparty::set_up_test(origin_account, atomic_bridge);
         let bridge_addr = signer::address_of(atomic_bridge);
         account::create_account_if_does_not_exist(bridge_addr);
+
+        let sender_address = signer::address_of(sender);
+        account::create_account_if_does_not_exist(sender_address);
+
+        let origin_addr = signer::address_of(origin_account);
+        account::create_account_if_does_not_exist(origin_addr);
+
         init_module(atomic_bridge);
+        let (burn_cap, mint_cap) = aptos_coin::initialize_for_test_without_aggregator_factory(aptos_framework);
+        coin::destroy_burn_cap(burn_cap);
+
+        coin::register<AptosCoin>(sender);
+        coin::register<AptosCoin>(origin_account);
+        coin::register<AptosCoin>(atomic_bridge); 
+
+        let amount = 1_000_000; // Specify the amount you want to mint
+        let coins = coin::mint<AptosCoin>(amount, &mint_cap);
+        aptos_framework::coin::deposit<AptosCoin>(sender_address, coins);
+        coin::destroy_mint_cap(mint_cap);
+
         assert!(exists<BridgeTransferStore>(bridge_addr), EDOES_NOT_EXIST);
     }
 
@@ -268,9 +287,7 @@ module atomic_bridge::atomic_bridge_initiator {
 
         let bridge_transfer_id = aptos_std::aptos_hash::keccak256(combined_bytes);
 
-        // Mint amount of tokens to sender
         let sender_address = signer::address_of(sender);
-        aptos_framework::coin::transfer<AptosCoin>(aptos_framework, sender_address, amount);
 
         initiate_bridge_transfer(
             sender,
@@ -342,7 +359,6 @@ module atomic_bridge::atomic_bridge_initiator {
         let amount = 1000;
         let nonce = 1;
         let sender_address = signer::address_of(sender);
-        aptos_framework::coin::transfer<AptosCoin>(aptos_framework, sender_address, amount);
 
         let combined_bytes = vector::empty<u8>();
         vector::append(&mut combined_bytes, bcs::to_bytes(&sender_address));
@@ -393,7 +409,6 @@ module atomic_bridge::atomic_bridge_initiator {
         let amount = 1000;
         let nonce = 1;
         let sender_address = signer::address_of(sender);
-        aptos_framework::coin::transfer<AptosCoin>(aptos_framework, sender_address, amount);
 
         let combined_bytes = vector::empty<u8>();
         vector::append(&mut combined_bytes, bcs::to_bytes(&sender_address));
@@ -432,8 +447,6 @@ module atomic_bridge::atomic_bridge_initiator {
         let nonce = 1;
 
         let sender_address = signer::address_of(sender);
-        coin::transfer<AptosCoin>(aptos_framework, sender_address, amount);
-
 
         let combined_bytes = vector::empty<u8>();
         vector::append(&mut combined_bytes, bcs::to_bytes(&sender_address));
@@ -485,7 +498,6 @@ module atomic_bridge::atomic_bridge_initiator {
         let amount = 1000;
         let nonce = 1;
         let sender_address = signer::address_of(sender);
-        aptos_framework::coin::transfer<AptosCoin>(aptos_framework, sender_address, amount);
 
         let combined_bytes = vector::empty<u8>();
         vector::append(&mut combined_bytes, bcs::to_bytes(&sender_address));
@@ -530,7 +542,6 @@ module atomic_bridge::atomic_bridge_initiator {
         let amount = 1000;
         let nonce = 1;
         let sender_address = signer::address_of(sender);
-        aptos_framework::coin::transfer<AptosCoin>(aptos_framework, sender_address, amount);
 
         let combined_bytes = vector::empty<u8>();
         vector::append(&mut combined_bytes, bcs::to_bytes(&sender_address));
