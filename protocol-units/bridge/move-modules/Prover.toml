@@ -24,4 +24,4 @@ vc_timeout = 40
 random_seed = 1
  
 # The number of processor cores to assume for concurrent check of verification conditions.
-proc_cores = 4
+proc_cores = 10
