@@ -23,3 +23,4 @@ profile.json
 *.log
 venv
 *.pem
+protocol-units/bridge/move-modules/boogie.bpl

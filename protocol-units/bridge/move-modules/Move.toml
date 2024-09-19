@@ -8,6 +8,7 @@ resource_addr = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75d
 origin_addr = "0xcafe"
 atomic_bridge = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
 moveth = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
+move_eth = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
 master_minter = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
 minter = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
 admin = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
@@ -16,6 +17,7 @@ denylister = "0xcade"
 
 [dev-addresses]
 # moveth = "0xbeef"
+# move_eth = "0xbeef"
 # atomic_bridge = "0xfeef"
 # master_minter = "0xbab"
 # minter = "0xface"

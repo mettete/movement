@@ -202,7 +202,7 @@ module atomic_bridge::atomic_bridge_initiator {
         assert!(aptos_std::aptos_hash::keccak256(bcs::to_bytes(&pre_image)) == bridge_transfer.hash_lock, EWRONG_PREIMAGE);
         assert!(timestamp::now_seconds() <= bridge_transfer.time_lock, ETIMELOCK_EXPIRED);
         
-        bridge_transfer.state = 2;
+        bridge_transfer.state = COMPLETED;
 
         event::emit_event(&mut store.bridge_transfer_completed_events, BridgeTransferCompletedEvent {
             bridge_transfer_id: copy bridge_transfer_id,
