@@ -117,6 +117,7 @@ module atomic_bridge::atomic_bridge_initiator {
         )
     }
 
+    //  What is this thing supposed to do? A short description would be helpful.
     public entry fun initiate_bridge_transfer(
         originator: &signer,
         recipient: vector<u8>, // eth address
@@ -172,6 +173,22 @@ module atomic_bridge::atomic_bridge_initiator {
         });
     }
 
+    //  Spec for initiate_bridge_transfer
+    //  This is not a complete spec, but it is a good start.
+    // spec initiate_bridge_transfer {
+
+    //     //  ensures that abort conditions enforce abort, but 
+    //     //  the does not cpature all the possible abort conditions.
+    //     pragma aborts_if_is_partial = true;
+    //     // The function should abort if the amount is 0
+    //     aborts_if amount == 0;
+
+    //     //  the store nonce is incremented by 1
+    //     let config_address = borrow_global<BridgeConfig>(@atomic_bridge).bridge_module_deployer;
+    //     ensures borrow_global_mut<BridgeTransferStore>(config_address).nonce == old(borrow_global_mut<BridgeTransferStore>(config_address).nonce) + 1;
+
+    // }
+
     public entry fun complete_bridge_transfer(
         account: &signer,
         bridge_transfer_id: vector<u8>,
@@ -185,7 +202,7 @@ module atomic_bridge::atomic_bridge_initiator {
         assert!(aptos_std::aptos_hash::keccak256(bcs::to_bytes(&pre_image)) == bridge_transfer.hash_lock, EWRONG_PREIMAGE);
         assert!(timestamp::now_seconds() <= bridge_transfer.time_lock, ETIMELOCK_EXPIRED);
         
-        bridge_transfer.state = COMPLETED;
+        bridge_transfer.state = 2;
 
         event::emit_event(&mut store.bridge_transfer_completed_events, BridgeTransferCompletedEvent {
             bridge_transfer_id: copy bridge_transfer_id,
