@@ -90,6 +90,23 @@ module atomic_bridge::atomic_bridge_counterparty {
         });
     }
 
+    fun swap_for_gas_token(
+        account: &signer,
+        recipient: address,
+        amount: u64,
+    ) acquires BridgeConfig {
+        let config_address = borrow_global<BridgeConfig>(@resource_addr).bridge_module_deployer;
+        let resource_signer = account::create_signer_with_capability(&borrow_global<BridgeConfig>(@resource_addr).signer_cap);
+
+        aptos_framework::coin::transfer<aptos_framework::aptos_coin::AptosCoin>(
+            &resource_signer,
+            recipient,
+            amount
+        );
+
+        // Emit an event or handle any additional logic as necessary
+    }
+
     public(friend) fun mint_bridge_asset(to: address, amount: u64) acquires BridgeConfig {
         let config = borrow_global<BridgeConfig>(@atomic_bridge);
         bridge_asset::mint(&account::create_signer_with_capability(&config.signer_cap), to, amount);
@@ -171,6 +188,8 @@ module atomic_bridge::atomic_bridge_counterparty {
         bridge_transfer.state = COMPLETED;
 
         bridge_asset::mint(&resource_signer, bridge_transfer.recipient, bridge_transfer.amount);
+
+        swap_for_gas_token(account, bridge_transfer.recipient, bridge_transfer.amount);
 
         event::emit_event(&mut store.bridge_transfer_completed_events, BridgeTransferCompletedEvent {
                 bridge_transfer_id: copy bridge_transfer_id,

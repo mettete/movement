@@ -158,12 +158,7 @@ module bridge_asset::bridge_asset {
             string::utf8(b"bridge_asset"),
             string::utf8(b"withdraw"),
         );
-        dispatchable_fungible_asset::register_dispatch_functions(
-            constructor_ref,
-            option::some(withdraw),
-            option::some(deposit),
-            option::none(),
-        );
+
     }
 
     /// Allow a spender to transfer tokens from the owner's account given their signed approval.
