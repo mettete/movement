@@ -1,5 +1,5 @@
-/// moveth FA 
-module moveth::moveth {
+/// bridge asset FA 
+module bridge_asset::bridge_asset {
     use aptos_framework::account;
     use aptos_framework::dispatchable_fungible_asset;
     use aptos_framework::event;
@@ -26,7 +26,7 @@ module moveth::moveth {
     /// The account is denylisted
     const EDENYLISTED: u64 = 5;
 
-    const ASSET_SYMBOL: vector<u8> = b"moveth";
+    const ASSET_SYMBOL: vector<u8> = b"asset";
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct Roles has key {
@@ -87,18 +87,18 @@ module moveth::moveth {
     }
 
     #[view]
-    public fun moveth_address(): address {
-        object::create_object_address(&@moveth, ASSET_SYMBOL)
+    public fun bridge_asset_address(): address {
+        object::create_object_address(&@bridge_asset, ASSET_SYMBOL)
     }
 
     #[view]
     public fun metadata(): Object<Metadata> {
-        object::address_to_object(moveth_address())
+        object::address_to_object(bridge_asset_address())
     }
 
-    /// Called as part of deployment to initialize moveth.
+    /// Called as part of deployment to initialize bridge asset.
     /// Note: The signer has to be the account where the module is published.
-    /// Create a moveth token (a new Fungible Asset)
+    /// Create a bridge asset token (a new Fungible Asset)
     /// Ensure any stores for the stablecoin are untransferable.
     /// Store Roles, Management and State resources in the Metadata object.
     /// Override deposit and withdraw functions of the newly created asset/token to add custom denylist logic.
@@ -150,12 +150,12 @@ module moveth::moveth {
         // checks.
         let deposit = function_info::new_function_info(
             resource_account,
-            string::utf8(b"moveth"),
+            string::utf8(b"bridge_asset"),
             string::utf8(b"deposit"),
         );
         let withdraw = function_info::new_function_info(
             resource_account,
-            string::utf8(b"moveth"),
+            string::utf8(b"bridge_asset"),
             string::utf8(b"withdraw"),
         );
         dispatchable_fungible_asset::register_dispatch_functions(
@@ -191,12 +191,12 @@ module moveth::moveth {
         };
         account::verify_signed_message(from, from_account_scheme, from_public_key, proof, expected_message);
 
-        let transfer_ref = &borrow_global<Management>(moveth_address()).transfer_ref;
+        let transfer_ref = &borrow_global<Management>(bridge_asset_address()).transfer_ref;
         // Only use with_ref API for primary_fungible_store (PFS) transfers in this module.
         primary_fungible_store::transfer_with_ref(transfer_ref, from, to, amount);
     }
 
-    /// Deposit function override to ensure that the account is not denylisted and the moveth is not paused.
+    /// Deposit function override to ensure that the account is not denylisted and the bridge asset is not paused.
     public fun deposit<T: key>(
         store: Object<T>,
         fa: FungibleAsset,
@@ -207,7 +207,7 @@ module moveth::moveth {
         fungible_asset::deposit_with_ref(transfer_ref, store, fa);
     }
 
-    /// Withdraw function override to ensure that the account is not denylisted and the moveth is not paused.
+    /// Withdraw function override to ensure that the account is not denylisted and the bridge asset is not paused.
     public fun withdraw<T: key>(
         store: Object<T>,
         amount: u64,
@@ -218,7 +218,7 @@ module moveth::moveth {
         fungible_asset::withdraw_with_ref(transfer_ref, store, amount)
     }
 
-    /// Mint new tokens to the specified account. This checks that the caller is a minter, the moveth is not paused,
+    /// Mint new tokens to the specified account. This checks that the caller is a minter, the bridge asset is not paused,
     /// and the account is not denylisted.
     public entry fun mint(minter: &signer, to: address, amount: u64) acquires Management, Roles, State {
         assert_not_paused();
@@ -226,7 +226,7 @@ module moveth::moveth {
         assert_not_denylisted(to);
         if (amount == 0) { return };
 
-        let management = borrow_global<Management>(moveth_address());
+        let management = borrow_global<Management>(bridge_asset_address());
         let tokens = fungible_asset::mint(&management.mint_ref, amount);
         // Ensure not to call pfs::deposit or dfa::deposit directly in the module.
         deposit(primary_fungible_store::ensure_primary_store_exists(to, metadata()), tokens, &management.transfer_ref);
@@ -254,7 +254,7 @@ module moveth::moveth {
         assert_is_minter(minter);
         if (amount == 0) { return };
 
-        let management = borrow_global<Management>(moveth_address());
+        let management = borrow_global<Management>(bridge_asset_address());
         let tokens = fungible_asset::withdraw_with_ref(
             &management.transfer_ref,
             store,
@@ -272,9 +272,9 @@ module moveth::moveth {
 
     /// Pause or unpause the stablecoin. This checks that the caller is the pauser.
     public entry fun set_pause(pauser: &signer, paused: bool) acquires Roles, State {
-        let roles = borrow_global<Roles>(moveth_address());
+        let roles = borrow_global<Roles>(bridge_asset_address());
         assert!(signer::address_of(pauser) == roles.pauser, EUNAUTHORIZED);
-        let state = borrow_global_mut<State>(moveth_address());
+        let state = borrow_global_mut<State>(bridge_asset_address());
         if (state.paused == paused) { return };
         state.paused = paused;
 
@@ -287,10 +287,10 @@ module moveth::moveth {
     /// Add an account to the denylist. This checks that the caller is the denylister.
     public entry fun denylist(denylister: &signer, account: address) acquires Management, Roles, State {
         assert_not_paused();
-        let roles = borrow_global<Roles>(moveth_address());
+        let roles = borrow_global<Roles>(bridge_asset_address());
         assert!(signer::address_of(denylister) == roles.denylister, EUNAUTHORIZED);
 
-        let freeze_ref = &borrow_global<Management>(moveth_address()).transfer_ref;
+        let freeze_ref = &borrow_global<Management>(bridge_asset_address()).transfer_ref;
         primary_fungible_store::set_frozen_flag(freeze_ref, account, true);
 
         event::emit(Denylist {
@@ -302,10 +302,10 @@ module moveth::moveth {
     /// Remove an account from the denylist. This checks that the caller is the denylister.
     public entry fun undenylist(denylister: &signer, account: address) acquires Management, Roles, State {
         assert_not_paused();
-        let roles = borrow_global<Roles>(moveth_address());
+        let roles = borrow_global<Roles>(bridge_asset_address());
         assert!(signer::address_of(denylister) == roles.denylister, EUNAUTHORIZED);
 
-        let freeze_ref = &borrow_global<Management>(moveth_address()).transfer_ref;
+        let freeze_ref = &borrow_global<Management>(bridge_asset_address()).transfer_ref;
         primary_fungible_store::set_frozen_flag(freeze_ref, account, false);
 
         event::emit(Denylist {
@@ -315,8 +315,8 @@ module moveth::moveth {
     }
 
     fun assert_is_minter(minter: &signer) acquires Roles {
-        if (exists<Roles>(moveth_address())) {
-        let roles = borrow_global<Roles>(moveth_address());
+        if (exists<Roles>(bridge_asset_address())) {
+        let roles = borrow_global<Roles>(bridge_asset_address());
         let minter_addr = signer::address_of(minter);
         assert!(minter_addr == roles.admin || vector::contains(&roles.minters, &minter_addr), EUNAUTHORIZED);
         } else {
@@ -325,8 +325,8 @@ module moveth::moveth {
     }
 
     fun assert_not_paused() acquires State {
-        if (exists<State>(moveth_address())) {
-            let state = borrow_global<State>(moveth_address());
+        if (exists<State>(bridge_asset_address())) {
+            let state = borrow_global<State>(bridge_asset_address());
             assert!(!state.paused, EPAUSED);
         } else {
             assert!(false, EPAUSED);
@@ -344,7 +344,7 @@ module moveth::moveth {
     }
 
     #[test_only]
-    public fun init_for_test(moveth_signer: &signer) {
-        init_module(moveth_signer);
+    public fun init_for_test(bridge_asset_signer: &signer) {
+        init_module(bridge_asset_signer);
     }
 }

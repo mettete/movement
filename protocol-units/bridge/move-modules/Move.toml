@@ -7,7 +7,7 @@ authors = []
 resource_addr = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
 origin_addr = "0xcafe"
 atomic_bridge = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
-moveth = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
+bridge_asset = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
 master_minter = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
 minter = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
 admin = "0xc3bb8488ab1a5815a9d543d7e41b0e0df46a7396f89b22821f07a4362f75ddc5"
@@ -15,7 +15,7 @@ pauser = "0xdafe"
 denylister = "0xcade"
 
 [dev-addresses]
-# moveth = "0xbeef"
+# bridge_asset = "0xbeef"
 # atomic_bridge = "0xfeef"
 # master_minter = "0xbab"
 # minter = "0xface"
