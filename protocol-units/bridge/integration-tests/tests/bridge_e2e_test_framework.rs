@@ -6,16 +6,17 @@ use alloy_network::EthereumWallet;
 use anyhow::Result;
 use aptos_types::account_address::AccountAddress;
 use bridge_config::Config;
-use bridge_integration_tests::{HarnessEthClient, TestHarness};
+use bridge_integration_tests::{HarnessEthClient, TestHarness, utils as test_utils};
 use bridge_service::{
 	chains::{
-		bridge_contracts::{BridgeContractError, BridgeContractEvent},
+		bridge_contracts::{BridgeContract, BridgeContractError, BridgeContractEvent},
 		ethereum::{
 			event_monitoring::EthMonitoring,
 			types::{EthAddress, AtomicBridgeInitiator},
 			utils::{send_transaction, send_transaction_rules},
 		},
 		movement::{
+			client::MovementClient,
 			client_framework::MovementClientFramework, 
 			event_monitoring::MovementMonitoring, 
 			utils::MovementAddress,
@@ -147,6 +148,80 @@ async fn test_bridge_transfer_eth_movement_happy_path() -> Result<(), anyhow::Er
 }
 
 #[tokio::test]
+async fn test_bridge_transfer_movement_eth_happy_path() -> Result<(), anyhow::Error> {
+	tracing_subscriber::fmt()
+		.with_env_filter(
+			EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+		)
+		.init();
+
+	let (mut eth_client_harness, mut mvt_client_harness, config) =
+		TestHarness::new_with_eth_and_movement().await?;
+
+	let mut eth_monitoring = EthMonitoring::build(&config.eth).await.unwrap();
+
+	MovementClientFramework::bridge_setup_scripts().await?;
+
+	//mvt_client_harness.init_set_timelock(60).await?; //Set to 1mn
+
+	tracing::info!("Init initiator and counter part test account.");
+
+	// Init mvt addresses
+	let movement_client_signer_address = mvt_client_harness.movement_client.signer().address();
+
+	{
+		let faucet_client = mvt_client_harness.faucet_client.write().unwrap();
+		faucet_client.fund(movement_client_signer_address, 100_000_000_000).await?;
+	}
+
+	let recipient_privkey = mvt_client_harness.fund_account().await;
+	let recipient_address = MovementAddress(recipient_privkey.address());
+
+	let counterpart_privekey = HarnessEthClient::get_initiator_private_key(&config);
+	let counter_party_address = EthAddress(counterpart_privekey.address());
+
+	//mint initiator to have enough moveeth to do the transfer
+	//mvt_client_harness.mint_moveeth(&recipient_address, 1).await?;
+
+	// 1) initialize Movement transfer
+	let hash_lock_pre_image = HashLockPreImage::random();
+	let hash_lock = HashLock(From::from(keccak256(hash_lock_pre_image)));
+	let amount = 1;
+	mvt_client_harness
+		.initiate_bridge_transfer(&recipient_privkey, counter_party_address, hash_lock, amount)
+		.await?;
+
+	// Wait for InitialtorCompleted event
+	tracing::info!("Wait for Bridge Lock event.");
+	let bridge_tranfer_id;
+	loop {
+		let event =
+			tokio::time::timeout(std::time::Duration::from_secs(30), eth_monitoring.next()).await?;
+		if let Some(Ok(BridgeContractEvent::Locked(detail))) = event {
+			bridge_tranfer_id = detail.bridge_transfer_id;
+			break;
+		}
+	}
+
+	// 2) Complete transfer on Eth
+	eth_client_harness
+		.eth_client
+		.counterparty_complete_bridge_transfer(bridge_tranfer_id, hash_lock_pre_image)
+		.await?;
+
+	loop {
+		let event =
+			tokio::time::timeout(std::time::Duration::from_secs(30), eth_monitoring.next()).await?;
+		if let Some(Ok(BridgeContractEvent::CounterPartCompleted(id, _))) = event {
+			assert_eq!(bridge_tranfer_id, id);
+			break;
+		}
+	}
+
+	Ok(())
+}
+
+#[tokio::test]
 async fn test_movement_event() -> Result<(), anyhow::Error> {
 	tracing_subscriber::fmt()
 		.with_env_filter(
@@ -165,7 +240,7 @@ async fn test_movement_event() -> Result<(), anyhow::Error> {
 
 	let args = MovementToEthCallArgs::default();
 
-	bridge_integration_tests::utils::initiate_bridge_transfer_helper_framework(
+	test_utils::initiate_bridge_transfer_helper_framework(
 		&mut movement_client,
 		args.initiator.0,
 		args.recipient.clone(),
