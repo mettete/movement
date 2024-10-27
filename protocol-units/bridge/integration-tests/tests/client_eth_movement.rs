@@ -1,5 +1,5 @@
 use alloy::{
-	primitives::{address, keccak256},
+	primitives::{address, keccak256, Address, FixedBytes},
 	providers::Provider,
 };
 use anyhow::Result;
@@ -22,6 +22,7 @@ use bridge_service::types::{
 };
 use futures::StreamExt;
 use std::io::BufRead;
+use std::str::FromStr;
 use tokio::time::{sleep, Duration};
 use tokio::{self};
 use tracing::info;
@@ -461,7 +462,7 @@ async fn test_eth_client_should_successfully_complete_transfer() {
 }
 
 #[tokio::test]
-async fn test_eth_client_lock_then_complete_transfer() -> Result<(), anyhow::Error> {
+async fn test_eth_client_lock_then_complete_transfer_weth() -> Result<(), anyhow::Error> {
 	tracing_subscriber::fmt()
 		.with_env_filter(
 			EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -512,15 +513,98 @@ async fn test_eth_client_lock_then_complete_transfer() -> Result<(), anyhow::Err
 			println!("wrong event {event:?}",);
 		}
 	}
-	println!("Initialte Event ok. Before lock_bridge_transfer");
+	println!("Initiate Event ok. Before lock_bridge_transfer");
 
+	eth_client_harness
+		.eth_client
+		.lock_bridge_transfer(
+			bridge_transfer_id,
+			HashLock(EthHash(hash_lock).0),
+			BridgeAddress(MovementAddress::from_str("0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16").expect("String to MovementAddress didn't work.").into()),
+			BridgeAddress(EthAddress(signer_address)),			
+			Amount(AssetType::EthAndWeth((42, 0))),
+		)
+		.await
+		.expect("Failed to lock bridge transfer");
+
+	println!("After lock event",);
+
+	let stdout = anvil.child_mut().stdout.take().unwrap();
+	let mut reader = std::io::BufReader::new(stdout).lines();
+	while let Some(Ok(line)) = reader.next() {
+		println!(">:{:?}", line);
+	}
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn test_eth_client_lock_then_complete_transfer_move() -> Result<(), anyhow::Error> {
+	tracing_subscriber::fmt()
+		.with_env_filter(
+			EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+		)
+		.init();
+
+	let config = Config::default();
+	let (mut eth_client_harness, config, mut anvil) =
+		TestHarness::new_only_eth(config.clone()).await;
+
+	println!("Config :{config:?}",);
+
+	let mut eth_monitoring = EthMonitoring::build(&config.eth).await.unwrap();
+
+	let signer_address: alloy::primitives::Address = eth_client_harness.signer_address();
+
+	let recipient_privkey = LocalAccount::generate(&mut rand::rngs::OsRng);
+	let recipient_address = MovementAddress(recipient_privkey.address());
+	let recipient_bytes: Vec<u8> = recipient_address.into();
+
+	let secret = "secret".to_string();
+	let hash_lock = keccak256(secret.as_bytes());
+	let hash_lock: [u8; 32] = hash_lock.into();
+
+	println!("Before initiate_bridge_transfer");
+
+	eth_client_harness
+		.eth_client
+		.initiate_bridge_transfer(
+			BridgeAddress(EthAddress(signer_address)),
+			BridgeAddress(recipient_bytes.clone()),
+			HashLock(EthHash(hash_lock).0),
+			Amount(AssetType::EthAndWeth((42, 0))),
+		)
+		.await
+		.expect("Failed to initiate bridge transfer");
+
+	// Wait for InitialtorCompleted event
+	tracing::info!("Wait for Bridge Initiated event.");
+	let bridge_transfer_id;
 	loop {
 		let event =
 			tokio::time::timeout(std::time::Duration::from_secs(30), eth_monitoring.next()).await?;
-		if let Some(Ok(BridgeContractEvent::Locked(detail))) = event {
+		if let Some(Ok(BridgeContractEvent::Initiated(detail))) = event {
+			bridge_transfer_id = detail.bridge_transfer_id;
 			break;
+		} else {
+			println!("wrong event {event:?}",);
 		}
 	}
+	println!("Initiate Event ok. Before lock_bridge_transfer");
+
+	eth_client_harness
+		.eth_client
+		.lock_bridge_transfer(
+			bridge_transfer_id,
+			HashLock(EthHash(hash_lock).0),
+			BridgeAddress(MovementAddress::from_str("0xf90391c81027f03cdea491ed8b36ffaced26b6df208a9b569e5baf2590eb9b16").expect("String to MovementAddress didn't work.").into()),
+			BridgeAddress(EthAddress(signer_address)),			
+			Amount(AssetType::EthAndWeth((42, 0))),
+		)
+		.await
+		.expect("Failed to lock bridge transfer");
+
+	println!("After lock event",);
 
 	let stdout = anvil.child_mut().stdout.take().unwrap();
 	let mut reader = std::io::BufReader::new(stdout).lines();
