@@ -12,6 +12,7 @@ use tokio::time::{sleep, Duration};
 use tokio::{self};
 use tracing::info;
 
+
 #[tokio::test]
 async fn test_movement_client_initiate_transfer() -> Result<(), anyhow::Error> {
 	let _ = tracing_subscriber::fmt().with_max_level(tracing::Level::DEBUG).try_init();
