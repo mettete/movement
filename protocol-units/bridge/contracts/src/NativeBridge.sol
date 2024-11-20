@@ -102,8 +102,11 @@ contract NativeBridge is AccessControlUpgradeable, PausableUpgradeable, INativeB
         uint256 nonce
     ) internal {
         // _l2l1RateLimit(amount);
-        // Ensure the bridge transfer has not already been completed
+
+        // Ensure the nonce is valid
         require(nonce > 0, InvalidNonce());
+
+        // Ensure the bridge transfer has not already been completed
         require(idsToIncomingNonces[bridgeTransferId] == 0, CompletedBridgeTransferId());
         // Ensure the bridge transfer ID is valid against the initiator, recipient, amount, and nonce
         require(
