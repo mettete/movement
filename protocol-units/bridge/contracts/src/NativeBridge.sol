@@ -31,27 +31,31 @@ contract NativeBridge is AccessControlUpgradeable, PausableUpgradeable, INativeB
     constructor() {
         _disableInitializers();
     }
-    // TODO: include rate limit
 
     /**
-    * @dev Initializes the NativeBridge contract
-    * @param _moveToken The address of the MOVE token contract
-    * @param _admin The address of the admin role
-    * @param _relayer The address of the relayer role
-    * @param _maintainer The address of the maintainer role
+     * @dev Initializes the NativeBridge contract
+     * @param _moveToken The address of the MOVE token contract
+     * @param _admin The address of the admin role
+     * @param _relayer The address of the relayer role
+     * @param _maintainer The address of the maintainer role
+     * @param _insuranceFund The address of the insurance fund
      */
-    function initialize(address _moveToken, address _admin, address _relayer, address _maintainer, address _insuranceFund) public initializer {
+    function initialize(
+        address _moveToken,
+        address _admin,
+        address _relayer,
+        address _maintainer,
+        address _insuranceFund
+    ) public initializer {
         require(_moveToken != address(0) && _admin != address(0) && _relayer != address(0), ZeroAddress());
         __Pausable_init();
         moveToken = IERC20(_moveToken);
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _grantRole(RELAYER_ROLE, _relayer);
-
+        // maintainer is optional
+        _grantRole(RELAYER_ROLE, _maintainer);
         // Set insurance fund
         insuranceFund = _insuranceFund;
-
-        // Maintainer is optional
-        _grantRole(RELAYER_ROLE, _maintainer);
     }
 
     /**
@@ -74,10 +78,10 @@ contract NativeBridge is AccessControlUpgradeable, PausableUpgradeable, INativeB
         // Transfer the MOVE tokens from the user to the contract
         if (!moveToken.transferFrom(initiator, address(this), amount)) revert MOVETransferFailed();
 
-        // Generate a unique nonce to prevent replay attacks, and generate a transfer ID
+        // Generates a unique bridge transfer id, product of the initiator, recipient, amount and a unique nonce
         bridgeTransferId = keccak256(abi.encodePacked(initiator, recipient, amount, ++_nonce));
 
-        // Store the bridge transfer details
+        // Store the bridge transfer details to nonce
         noncesToOutboundTransfers[_nonce] = OutboundTransfer(bridgeTransferId, initiator, recipient, amount);
 
         emit BridgeTransferInitiated(bridgeTransferId, initiator, recipient, amount, _nonce);
@@ -103,12 +107,12 @@ contract NativeBridge is AccessControlUpgradeable, PausableUpgradeable, INativeB
     }
 
     /**
-    * @dev Completes multiple bridge transfers
-    * @param bridgeTransferIds Unique identifiers for the BridgeTransfers
-    * @param initiators The addresses on the other chain that originated the transfer of funds
-    * @param recipients The addresses on this chain to which to transfer funds
-    * @param amounts The amounts to transfer
-    * @param nonces The seed nonces to generate the bridgeTransferIds
+     * @dev Completes multiple bridge transfers
+     * @param bridgeTransferIds Unique identifiers for the BridgeTransfers
+     * @param initiators The addresses on the other chain that originated the transfer of funds
+     * @param recipients The addresses on this chain to which to transfer funds
+     * @param amounts The amounts to transfer
+     * @param nonces The seed nonces to generate the bridgeTransferIds
      */
     function batchCompleteBridgeTransfer(
         bytes32[] memory bridgeTransferIds,
@@ -156,11 +160,18 @@ contract NativeBridge is AccessControlUpgradeable, PausableUpgradeable, INativeB
         emit BridgeTransferCompleted(bridgeTransferId, initiator, recipient, amount, nonce);
     }
 
+    /**
+     * @dev Sets the insurance fund address to read move balance. Admin only
+     * @param _insuranceFund Address of the insurance fund
+     */
     function setInsuranceFund(address _insuranceFund) external onlyRole(DEFAULT_ADMIN_ROLE) {
         insuranceFund = _insuranceFund;
         emit InsuranceFundUpdated(_insuranceFund);
     }
 
+    /**
+     * @dev Toggles between paused and unapused. Admin only
+     */
     function togglePause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         paused() ? _pause() : _unpause();
         emit PauseToggled(paused());
