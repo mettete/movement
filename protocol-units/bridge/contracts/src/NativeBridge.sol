@@ -17,9 +17,13 @@ contract NativeBridge is AccessControlUpgradeable, PausableUpgradeable, INativeB
         uint256 amount;
     }
 
+    // Maps unique nonces on the originating side of the bridge to the details of the transfer
     mapping(uint256 nonce => OutboundTransfer) public noncesToOutboundTransfers;
+    // Maps unique bridge transfer IDs on the destination side of the bridge to nonces coming from originating side
     mapping(bytes32 bridgeTransferId => uint256 nonce) public idsToInboundNonces;
+    // Daily rate limit budget for outbound transfers
     mapping(uint256 day => uint256 amount) public outboundRateLimitBudget;
+    // Daily rate limit budget for inbound transfers
     mapping(uint256 day => uint256 amount) public inboundRateLimitBudget;
 
     address public insuranceFund;
@@ -178,14 +182,20 @@ contract NativeBridge is AccessControlUpgradeable, PausableUpgradeable, INativeB
     }
 
     function _rateLimitOutbound(uint256 amount) internal {
+        // Gets the current day
         uint256 day = block.timestamp / 1 days;
+        // Adds the amount to the daily rate limit budget
         outboundRateLimitBudget[day] += amount;
+        // Ensures the daily outbound rate limit budget is less than 25% of the insurance fund balance
         require(outboundRateLimitBudget[day] < moveToken.balanceOf(insuranceFund) / 4, OutboundRateLimitExceeded());
     }
 
     function _rateLimitInbound(uint256 amount) internal {
+        // Gets the current day
         uint256 day = block.timestamp / 1 days;
+        // Adds the amount to the daily rate limit budget
         inboundRateLimitBudget[day] += amount;
+        // Ensures the inbound daily rate limit budget is less than 25% of the insurance fund balance
         require(inboundRateLimitBudget[day] < moveToken.balanceOf(insuranceFund) / 4, InboundRateLimitExceeded());
     }
 }
