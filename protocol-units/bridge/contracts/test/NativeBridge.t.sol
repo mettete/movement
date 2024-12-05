@@ -2,13 +2,12 @@
 pragma solidity ^0.8.22;
 pragma abicoder v2;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test, console, Vm} from "forge-std/Test.sol";
 import {NativeBridge, AccessControlUpgradeable, INativeBridge} from "../src/NativeBridge.sol";
 import {IERC20Errors} from "openzeppelin-contracts/contracts/interfaces/draft-IERC6093.sol";
 import {IAccessControl} from "openzeppelin-contracts/contracts/access/IAccessControl.sol";
 import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-
 import {MockMOVEToken} from "../src/MockMOVEToken.sol";
 
 contract NativeBridgeTest is Test {
@@ -27,21 +26,30 @@ contract NativeBridgeTest is Test {
     function setUp() public {
         moveToken = new MockMOVEToken();
         moveToken.initialize(address(this));
-
+        
         nativeBridgeImplementation = new NativeBridge();
-        proxyAdmin = new ProxyAdmin(deployer);
+        vm.recordLogs();
         proxy = new TransparentUpgradeableProxy(
             address(nativeBridgeImplementation),
-            address(proxyAdmin),
+            deployer,
             abi.encodeWithSignature(
-                "initialize(address,address,address,address,address)", address(moveToken), deployer, relayer, address(0), insuranceFund
+                "initialize(address,address,address,address,address)",
+                address(moveToken),
+                deployer,
+                relayer,
+                address(0),
+                insuranceFund
             )
         );
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        proxyAdmin = ProxyAdmin(logs[logs.length - 2].emitter);
+
         nativeBridge = NativeBridge(address(proxy));
     }
 
     function testInitiateBridgeFuzz(address _originator, bytes32 _recipient, uint256 _amount) public {
         excludeSender(deployer);
+        excludeSender(address(proxyAdmin));
         vm.assume(_originator != address(0));
         vm.assume(_originator != deployer);
 
@@ -73,6 +81,8 @@ contract NativeBridgeTest is Test {
 
     function testOutboundRateLimitFuzz(address sender, uint256 _amount) public {
         excludeSender(deployer);
+        excludeSender(address(proxyAdmin));
+
         _amount = bound(_amount, 3, 1000000000 * 10 ** 8);
         moveToken.transfer(sender, _amount);
 
@@ -93,23 +103,33 @@ contract NativeBridgeTest is Test {
 
     function testInboundRateLimitFuzz(address receiver, uint256 _amount) public {
         _amount = bound(_amount, 3, 1000000000 * 10 ** 8);
+        excludeSender(address(proxyAdmin));
         moveToken.transfer(address(nativeBridge), _amount);
 
-        bytes32 tx1BridgeTransferId = keccak256(abi.encodePacked(keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, uint256(1)));
-        bytes32 tx2BridgeTransferId = keccak256(abi.encodePacked(keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, uint256(2)));
-        
+        bytes32 tx1BridgeTransferId =
+            keccak256(abi.encodePacked(keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, uint256(1)));
+        bytes32 tx2BridgeTransferId =
+            keccak256(abi.encodePacked(keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, uint256(2)));
 
         vm.startPrank(relayer);
-        nativeBridge.completeBridgeTransfer(tx1BridgeTransferId, keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, 1);
+        nativeBridge.completeBridgeTransfer(
+            tx1BridgeTransferId, keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, 1
+        );
 
         vm.warp(1 days - 1);
         if (_amount >= moveToken.balanceOf(insuranceFund) / 4) {
             vm.expectRevert(INativeBridge.InboundRateLimitExceeded.selector);
-            nativeBridge.completeBridgeTransfer(tx2BridgeTransferId, keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, 2);
+            nativeBridge.completeBridgeTransfer(
+                tx2BridgeTransferId, keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, 2
+            );
             vm.warp(1 days + 1);
-            nativeBridge.completeBridgeTransfer(tx2BridgeTransferId, keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, 2);
+            nativeBridge.completeBridgeTransfer(
+                tx2BridgeTransferId, keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, 2
+            );
         } else {
-            nativeBridge.completeBridgeTransfer(tx2BridgeTransferId, keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, 2);
+            nativeBridge.completeBridgeTransfer(
+                tx2BridgeTransferId, keccak256(abi.encodePacked(receiver)), receiver, _amount / 2, 2
+            );
         }
     }
 
@@ -127,7 +147,11 @@ contract NativeBridgeTest is Test {
         moveToken.transfer(address(nativeBridge), _amount);
 
         console.log("Testing unathourized relayer");
-        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, address(this), keccak256("RELAYER_ROLE")));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, address(this), keccak256("RELAYER_ROLE")
+            )
+        );
         nativeBridge.completeBridgeTransfer(bridgeTransferId, _originator, _recipient, _amount, _nonce);
 
         vm.startPrank(relayer);
@@ -154,8 +178,7 @@ contract NativeBridgeTest is Test {
         console.log("Testing correct values");
         nativeBridge.completeBridgeTransfer(bridgeTransferId, _originator, _recipient, _amount, _nonce);
 
-        uint256 nonce =
-            nativeBridge.idsToInboundNonces(bridgeTransferId);
+        uint256 nonce = nativeBridge.idsToInboundNonces(bridgeTransferId);
 
         assertEq(nonce, _nonce);
         vm.stopPrank();
@@ -186,8 +209,7 @@ contract NativeBridgeTest is Test {
         nativeBridge.batchCompleteBridgeTransfer(bridgeTransferIds, originators, recipients, amounts, nonces);
 
         for (uint256 i; i < length; i++) {
-            uint256 nonce =
-                nativeBridge.idsToInboundNonces(bridgeTransferIds[i]);
+            uint256 nonce = nativeBridge.idsToInboundNonces(bridgeTransferIds[i]);
 
             assertEq(nonce, nonces[i]);
         }
